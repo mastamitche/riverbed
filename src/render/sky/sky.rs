@@ -1,14 +1,16 @@
-use std::f32::consts::PI;
-use bevy::{pbr::VolumetricLight, prelude::*};
-use bevy_atmosphere::{prelude::{AtmospherePlugin, AtmosphereCamera, Nishita, AtmosphereModel}, system_param::AtmosphereMut};
 use crate::render::camera::{CameraSpawn, FpsCam};
+use bevy::{pbr::VolumetricLight, prelude::*};
+use bevy_atmosphere::{
+    prelude::{AtmosphereCamera, AtmosphereModel, AtmospherePlugin, Nishita},
+    system_param::AtmosphereMut,
+};
+use std::f32::consts::PI;
 const DAY_LENGTH_MINUTES: f32 = 0.2;
-const C: f32 = DAY_LENGTH_MINUTES*120.*PI;
+const C: f32 = DAY_LENGTH_MINUTES * 120. * PI;
 
 // Timer for updating the daylight cycle (updating the atmosphere every frame is slow, so it's better to do incremental changes)
 #[derive(Resource)]
 struct CycleTimer(Timer);
-
 
 #[derive(Component)]
 struct Sun;
@@ -43,25 +45,20 @@ fn daylight_cycle(
 
 pub struct SkyPlugin;
 
-
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
-        app   
-            .insert_resource(AmbientLight {
-                color: Color::WHITE,
-                brightness: 1000.0,
-            })     
-            .insert_resource(AtmosphereModel::new(Nishita {
-                ..default()
-            }))
-            .insert_resource(CycleTimer(Timer::new(
-                 // Update our atmosphere every 500ms
-                bevy::utils::Duration::from_millis(500),
-                TimerMode::Repeating,
-            )))
-            .add_plugins(AtmospherePlugin)
-            .add_systems(Startup, spawn_sun.after(CameraSpawn))
-            .add_systems(Update, daylight_cycle)
-            ;
+        app.insert_resource(AmbientLight {
+            color: Color::WHITE,
+            brightness: 800.0,
+        })
+        .insert_resource(AtmosphereModel::new(Nishita { ..default() }))
+        .insert_resource(CycleTimer(Timer::new(
+            // Update our atmosphere every 500ms
+            bevy::utils::Duration::from_millis(500),
+            TimerMode::Repeating,
+        )))
+        .add_plugins(AtmospherePlugin)
+        .add_systems(Startup, spawn_sun.after(CameraSpawn))
+        .add_systems(Update, daylight_cycle);
     }
 }

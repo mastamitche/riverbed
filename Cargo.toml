@@ -10,7 +10,20 @@ members = [
 ]
 
 [dependencies]
-bevy = { version = "0.15" }
+bevy = { version = "0.15.2" ,default-features = true, features = [
+    "bevy_winit",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_sprite",
+    "webgpu",
+    "bevy_debug_stepping",
+    "bevy_asset",
+    "bevy_scene",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+]  }
+bevy_dev_tools = "0.15.0"
 bevy_atmosphere = "*"
 binary-greedy-meshing = "*"
 confy = "*"

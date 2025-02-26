@@ -162,7 +162,7 @@ fn fragment(
     var pbr_input = pbr_input_from_standard_material(vertex_output, is_front);
     
     // sample texture
-    pbr_input.material.base_color = in.color * in.face_light * textureSampleBias(texture_pack, texture_sampler, in.uv, in.texture_layer + (u32(globals.time*2.0) % anim_offsets[in.texture_layer]), view.mip_bias);
+    pbr_input.material.base_color = in.color * in.face_light;//* textureSampleBias(texture_pack, texture_sampler, in.uv, in.texture_layer + (u32(globals.time*2.0) % anim_offsets[in.texture_layer]), view.mip_bias);
     
     // alpha discard
     pbr_input.material.base_color = fns::alpha_discard(pbr_input.material, pbr_input.material.base_color);
