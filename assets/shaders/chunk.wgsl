@@ -131,7 +131,6 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     out.world_normal = normal;
     out.uv = vec2(u, v);
     out.color = face_color;
-    //out.texture_layer = texture_layer;
     out.face_light = face_light;
     return out;
 }
@@ -145,15 +144,20 @@ fn fragment(
     vertex_output.position = in.position;
     vertex_output.world_position = in.world_position;
     vertex_output.world_normal = in.world_normal;
-    vertex_output.color = in.color;
+#ifdef VERTEX_UVS
     vertex_output.uv = in.uv;
+#endif
+#ifdef VERTEX_UVS_B
     vertex_output.uv_b = in.uv;
-    
+#endif
+#ifdef VERTEX_COLORS
+    vertex_output.color = in.color;
+#endif
     // generate a PbrInput struct from the StandardMaterial bindings
     var pbr_input = pbr_input_from_standard_material(vertex_output, is_front);
     
     // sample texture
-    pbr_input.material.base_color = in.color * in.face_light;//* textureSampleBias(texture_pack, texture_sampler, in.uv, in.texture_layer + (u32(globals.time*2.0) % anim_offsets[in.texture_layer]), view.mip_bias);
+    pbr_input.material.base_color = in.color * in.face_light;
     
     // alpha discard
     pbr_input.material.base_color = fns::alpha_discard(pbr_input.material, pbr_input.material.base_color);
