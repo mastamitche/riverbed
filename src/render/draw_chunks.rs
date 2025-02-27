@@ -2,7 +2,6 @@ use super::chunk_culling::chunk_culling;
 use super::shared_load_area::{setup_shared_load_area, update_shared_load_area, SharedLoadArea};
 use super::texture_array::BlockTextureArray;
 use super::texture_array::{TextureArrayPlugin, TextureMap};
-use super::BlockTexState;
 use crate::block::Face;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
@@ -123,15 +122,16 @@ fn setup_mesh_thread(
     let texture_map = Arc::clone(&texture_map.0);
     thread_pool
         .spawn(async move {
-            while texture_map.len() == 0 {
-                yield_now()
-            }
+            // while texture_map.len() == 0 {
+            //     yield_now()
+            // }
             loop {
                 let Some((chunk_pos, dist)) = shared_load_area.read().pop_closest_change(&chunks)
                 else {
                     yield_now();
                     continue;
                 };
+                //println!("meshing chunk {:?} with dist {}", chunk_pos, dist);
                 let lod = choose_lod_level(dist);
                 let Some(chunk) = chunks.get(&chunk_pos) else {
                     continue;
@@ -177,6 +177,7 @@ pub fn pull_meshes(
             }
             continue;
         };
+        //println!("Mesh available");
         let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
         if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
             if let Ok((mut handle, mut old_lod)) = mesh_query.get_mut(*ent) {
@@ -255,7 +256,7 @@ impl Plugin for Draw3d {
             )
             .add_systems(Update, update_shared_load_area)
             .add_systems(Update, mark_lod_remesh)
-            .add_systems(Update, pull_meshes.run_if(in_state(BlockTexState::Mapped)))
+            .add_systems(Update, pull_meshes)
             .add_systems(Update, on_col_unload)
             //.add_systems(Update, chunk_aabb_gizmos)
             .add_systems(PostUpdate, chunk_culling);

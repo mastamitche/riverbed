@@ -19,9 +19,6 @@
 }
 #endif
 
-@group(2) @binding(100) var texture_pack: texture_2d_array<f32>;
-@group(2) @binding(101) var texture_sampler: sampler;
-@group(2) @binding(102) var<storage, read> anim_offsets: array<u32>;
 
 const MASK2: u32 = 3;
 const MASK3: u32 = 7;
@@ -41,8 +38,7 @@ struct CustomVertexOutput {
     @location(1) world_normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(3) color: vec4<f32>,
-    @location(4) texture_layer: u32,
-    @location(5) face_light: vec4<f32>,
+    @location(4) face_light: vec4<f32>,
 };
 
 
@@ -135,7 +131,7 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     out.world_normal = normal;
     out.uv = vec2(u, v);
     out.color = face_color;
-    out.texture_layer = texture_layer;
+    //out.texture_layer = texture_layer;
     out.face_light = face_light;
     return out;
 }
@@ -149,15 +145,10 @@ fn fragment(
     vertex_output.position = in.position;
     vertex_output.world_position = in.world_position;
     vertex_output.world_normal = in.world_normal;
-#ifdef VERTEX_UVS
-    vertex_output.uv = in.uv;
-#endif
-#ifdef VERTEX_UVS_B
-    vertex_output.uv_b = in.uv;
-#endif
-#ifdef VERTEX_COLORS
     vertex_output.color = in.color;
-#endif
+    vertex_output.uv = in.uv;
+    vertex_output.uv_b = in.uv;
+    
     // generate a PbrInput struct from the StandardMaterial bindings
     var pbr_input = pbr_input_from_standard_material(vertex_output, is_front);
     

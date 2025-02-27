@@ -1,16 +1,23 @@
 use std::collections::BTreeSet;
 
 use bevy::{
-    log::info_span, prelude::Mesh, 
-    render::{mesh::{Indices, MeshVertexAttribute}, 
-    render_asset::RenderAssetUsages, 
-    render_resource::{PrimitiveTopology, VertexFormat}}
+    log::info_span,
+    prelude::Mesh,
+    render::{
+        mesh::{Indices, MeshVertexAttribute},
+        render_asset::RenderAssetUsages,
+        render_resource::{PrimitiveTopology, VertexFormat},
+    },
 };
 use binary_greedy_meshing as bgm;
 
-use crate::{Block, block::Face, world::{pad_linearize, Chunk, CHUNKP_S3}};
-use crate::world::CHUNK_S1;
 use super::texture_array::TextureMapTrait;
+use crate::world::CHUNK_S1;
+use crate::{
+    block::Face,
+    world::{pad_linearize, Chunk, CHUNKP_S3},
+    Block,
+};
 
 const MASK_6: u64 = 0b111111;
 const MASK_XYZ: u64 = 0b111111_111111_111111;
@@ -31,7 +38,6 @@ const MASK_XYZ: u64 = 0b111111_111111_111111;
 pub const ATTRIBUTE_VOXEL_DATA: MeshVertexAttribute =
     MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Uint32x2);
 
-
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
         let voxels = self.data.unpack_u16();
@@ -42,7 +48,7 @@ impl Chunk {
         for x in 0..CHUNK_S1 {
             for y in 0..CHUNK_S1 {
                 for z in 0..CHUNK_S1 {
-                    let lod_i = pad_linearize(x/lod, y/lod, z/lod);        
+                    let lod_i = pad_linearize(x / lod, y / lod, z / lod);
                     if res[lod_i] == 0 {
                         res[lod_i] = voxels[pad_linearize(x, y, z)];
                     }
@@ -54,24 +60,29 @@ impl Chunk {
 
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(&self, texture_map: impl TextureMapTrait, lod: usize) ->  [Option<Mesh>; 6] {
+    pub fn create_face_meshes(
+        &self,
+        texture_map: impl TextureMapTrait,
+        lod: usize,
+    ) -> [Option<Mesh>; 6] {
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         let voxels = self.voxel_data_lod(lod);
         let mut mesh_data = bgm::MeshData::new();
         mesh_data_span.exit();
         let mesh_build_span = info_span!("mesh build", name = "mesh build").entered();
-        let transparents = BTreeSet::from_iter(self.palette.iter().enumerate().filter_map(
-            |(i, block)| if i != 0 && !block.is_opaque() {
-                Some(i as u16)
-            } else {
-                None
-            }
-        ));
+        let transparents =
+            BTreeSet::from_iter(self.palette.iter().enumerate().filter_map(|(i, block)| {
+                if i != 0 && !block.is_opaque() {
+                    Some(i as u16)
+                } else {
+                    None
+                }
+            }));
         bgm::mesh(&voxels, &mut mesh_data, transparents);
         let mut meshes = core::array::from_fn(|_| None);
         for (face_n, quads) in mesh_data.quads.iter().enumerate() {
-            let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len()*4);
+            let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len() * 4);
             let indices = bgm::indices(quads.len());
             let face: Face = face_n.into();
             for quad in quads {
@@ -85,15 +96,15 @@ impl Chunk {
                     (Block::GrassBlock, Face::Up) => 0b011_111_001,
                     (Block::SeaBlock, _) => 0b110_011_001,
                     (block, _) if block.is_foliage() => 0b010_101_001,
-                    _ => 0b111_111_111
+                    _ => 0b111_111_111,
                 };
                 let vertices = face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
                 let quad_info = (layer << 12) | (color << 3) | face_n as u32;
                 voxel_data.extend_from_slice(&[
-                    [vertices[0], quad_info], 
-                    [vertices[1], quad_info], 
-                    [vertices[2], quad_info], 
-                    [vertices[3], quad_info]
+                    [vertices[0], quad_info],
+                    [vertices[1], quad_info],
+                    [vertices[2], quad_info],
+                    [vertices[3], quad_info],
                 ]);
             }
             meshes[face_n] = Some(
