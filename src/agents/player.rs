@@ -91,7 +91,7 @@ pub enum DevCommand {
 pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
     let realm = Realm::Overworld;
     // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
-    let rd = RenderDistance(32);
+    let rd = RenderDistance(64);
     commands
         .spawn((
             Transform {

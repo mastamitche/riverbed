@@ -37,6 +37,8 @@ const MASK_XYZ: u64 = 0b111111_111111_111111;
 /// `0bllll_iiiiiiiiiiiiiiii_ccccccccc_nnn`
 pub const ATTRIBUTE_VOXEL_DATA: MeshVertexAttribute =
     MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Uint32x2);
+pub const ATTRIBUTE_INSTANCE_DATA: MeshVertexAttribute =
+    MeshVertexAttribute::new("InstanceData", 48757582, VertexFormat::Uint32x2);
 
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {

@@ -26,7 +26,10 @@ fn choose_lod_level(chunk_dist: u32) -> usize {
     if chunk_dist < 8 {
         return 1;
     }
-    return 2;
+    if chunk_dist < 12 {
+        return 2;
+    }
+    return 3;
 }
 
 fn mark_lod_remesh(
@@ -122,9 +125,6 @@ fn setup_mesh_thread(
     let texture_map = Arc::clone(&texture_map.0);
     thread_pool
         .spawn(async move {
-            // while texture_map.len() == 0 {
-            //     yield_now()
-            // }
             loop {
                 let Some((chunk_pos, dist)) = shared_load_area.read().pop_closest_change(&chunks)
                 else {

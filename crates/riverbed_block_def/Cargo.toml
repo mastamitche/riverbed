@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-nom = "*"
+nom = "7.1.3"
 itertools = "*"
 ron = "*"
 serde = { version = "*", features = ["derive"] }
