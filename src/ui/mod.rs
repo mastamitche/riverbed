@@ -1,149 +1,141 @@
-mod crosshair;
-mod debug_display;
-mod game_menu;
-mod ui_tex_map;
+use crate::agents::{PlayerControlled, AABB};
 use bevy::{
     prelude::*,
+    render::camera::ScalingMode,
     window::{CursorGrabMode, SystemCursorIcon},
-    winit::cursor::CursorIcon,
 };
-use crosshair::setup_crosshair;
-use debug_display::DebugDisplayPlugin;
-use game_menu::MenuPlugin;
-use leafwing_input_manager::prelude::*;
-use ui_tex_map::UiTexMapPlugin;
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<GameUiState>()
-            .add_computed_state::<ScrollGrabbed>()
-            .add_computed_state::<CursorGrabbed>()
-            .add_computed_state::<Inventory>()
-            .add_plugins(InputManagerPlugin::<UIAction>::default())
-            .add_plugins(UiTexMapPlugin)
-            .add_plugins(DebugDisplayPlugin)
-            .add_plugins(MenuPlugin)
-            .add_systems(Startup, setup_ui_actions)
-            .add_systems(Startup, setup_crosshair)
-            .add_systems(Update, process_ui_actions)
-            .add_systems(OnEnter(CursorGrabbed), grab_cursor)
-            .add_systems(OnExit(CursorGrabbed), free_cursor)
-            .add_systems(Update, highlight_hover.run_if(not(in_state(CursorGrabbed))));
+        app.add_plugins(EguiPlugin);
+        let initial_pitch_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
+        let initial_pitch: f32 = initial_pitch_degrees.to_radians();
+        app.insert_resource(CameraSettings {
+            projection_type: ProjectionType::Orthographic,
+            fov: 60.0,
+            scale: 5.0,
+            near: 0.1,
+            far: 10000.0,
+            distance: 100.0,
+            pitch: initial_pitch,
+            yaw: 0.0,
+        })
+        .add_systems(
+            Update,
+            (ui_system, adjust_camera_angle, update_camera_projection),
+        );
     }
 }
-
-#[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
-pub enum GameUiState {
-    #[default]
-    None,
-    InGameMenu,
-    CraftingMenu,
-    FurnaceMenu,
+#[derive(PartialEq)]
+enum ProjectionType {
+    Perspective,
+    Orthographic,
 }
 
-impl GameUiState {
-    /// Game states that need the cursor to operate in
-    pub fn needs_free_cursor(&self) -> bool {
-        matches!(self, GameUiState::InGameMenu | GameUiState::FurnaceMenu)
-    }
-
-    /// Game states that only need scrolling to operate in (includes all free cursor state)
-    pub fn needs_scrolling(&self) -> bool {
-        self.needs_free_cursor() || matches!(self, GameUiState::CraftingMenu)
-    }
+#[derive(Resource)]
+pub struct CameraSettings {
+    projection_type: ProjectionType,
+    // Perspective settings
+    fov: f32,
+    // Orthographic settings
+    scale: f32,
+    // Shared settings
+    near: f32,
+    far: f32,
+    distance: f32,
+    pitch: f32,
+    yaw: f32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CursorGrabbed;
+pub fn adjust_camera_angle(
+    camera_settings: Res<CameraSettings>,
+    mut query: Query<&mut Transform, With<Camera3d>>,
+    player_query: Query<(Entity, &AABB, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
+) {
+    let mut camera_transform = query.single_mut();
+    let (_, _, player_transform) = player_query.single();
 
-impl ComputedStates for CursorGrabbed {
-    type SourceStates = GameUiState;
+    // Get the player's position
+    let player_pos = player_transform.translation;
 
-    fn compute(sources: Self::SourceStates) -> Option<Self> {
-        if sources.needs_free_cursor() {
-            None
-        } else {
-            Some(Self)
+    // Calculate the new camera position
+    let pitch = camera_settings.pitch.to_radians();
+    let yaw = camera_settings.yaw.to_radians();
+
+    // Calculate the new camera position
+    let offset = Vec3::new(
+        camera_settings.distance * yaw.sin() * pitch.cos(),
+        camera_settings.distance * pitch.sin(),
+        -camera_settings.distance * yaw.cos() * pitch.cos(),
+    );
+
+    // Set the new camera position relative to the player
+    camera_transform.translation = player_pos + offset;
+
+    // Make the camera look at the player
+    camera_transform.look_at(player_pos, Vec3::Y);
+}
+
+fn ui_system(mut contexts: EguiContexts, mut camera_settings: ResMut<CameraSettings>) {
+    egui::Window::new("Camera Settings").show(contexts.ctx_mut(), |ui| {
+        ui.radio_value(
+            &mut camera_settings.projection_type,
+            ProjectionType::Perspective,
+            "Perspective",
+        );
+        ui.radio_value(
+            &mut camera_settings.projection_type,
+            ProjectionType::Orthographic,
+            "Orthographic",
+        );
+
+        ui.add(egui::Slider::new(&mut camera_settings.distance, 1.0..=3000.0).text("Height"));
+        ui.add(egui::Slider::new(&mut camera_settings.pitch, 0.0..=90.0).text("Pitch"));
+        ui.add(egui::Slider::new(&mut camera_settings.yaw, 0.0..=360.0).text("Yaw"));
+        // ui.add(egui::Slider::new(&mut camera_settings.near, 0.1..=100.0).text("Near"));
+        // ui.add(egui::Slider::new(&mut camera_settings.far, 100.0..=10000.0).text("Far"));
+
+        match camera_settings.projection_type {
+            ProjectionType::Perspective => {
+                ui.add(egui::Slider::new(&mut camera_settings.fov, 0.0..=120.0).text("FOV"));
+            }
+            ProjectionType::Orthographic => {
+                ui.add(egui::Slider::new(&mut camera_settings.scale, 0.1..=20.0).text("Scale"));
+            }
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ScrollGrabbed;
-
-impl ComputedStates for ScrollGrabbed {
-    type SourceStates = GameUiState;
-
-    fn compute(sources: Self::SourceStates) -> Option<Self> {
-        if sources.needs_scrolling() {
-            None
-        } else {
-            Some(Self)
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Inventory;
-
-impl ComputedStates for Inventory {
-    type SourceStates = GameUiState;
-
-    fn compute(sources: Self::SourceStates) -> Option<Self> {
-        if sources.needs_free_cursor() && sources != GameUiState::InGameMenu {
-            Some(Self)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Actionlike, Reflect, PartialEq, Eq, Clone, Copy, Debug, Hash)]
-pub enum UIAction {
-    Escape,
-    CraftingMenu,
-    ScrollUp,
-    ScrollDown,
-}
-
-fn setup_ui_actions(mut commands: Commands) {
-    let mut input_map = InputMap::new([
-        (UIAction::Escape, KeyCode::Escape),
-        (UIAction::CraftingMenu, KeyCode::KeyC),
-    ]);
-    input_map.insert(UIAction::ScrollUp, MouseScrollDirection::UP);
-    input_map.insert(UIAction::ScrollDown, MouseScrollDirection::DOWN);
-    commands.spawn(InputManagerBundle::<UIAction> {
-        action_state: ActionState::default(),
-        input_map,
     });
 }
 
-fn process_ui_actions(
-    mut ui_action_query: Query<&ActionState<UIAction>>,
-    game_ui_state: Res<State<GameUiState>>,
-    mut next_ui_state: ResMut<NextState<GameUiState>>,
+fn update_camera_projection(
+    camera_settings: Res<CameraSettings>,
+    mut query: Query<&mut Projection, With<Camera3d>>,
 ) {
-    let action_state = ui_action_query.single_mut();
-    for action in action_state.get_just_pressed() {
-        if action == UIAction::Escape {
-            if **game_ui_state == GameUiState::None {
-                next_ui_state.set(GameUiState::InGameMenu);
-            } else {
-                next_ui_state.set(GameUiState::None);
+    for mut projection in query.iter_mut() {
+        match camera_settings.projection_type {
+            ProjectionType::Perspective => {
+                *projection = Projection::Perspective(PerspectiveProjection {
+                    fov: camera_settings.fov.to_radians(),
+                    aspect_ratio: 1.0, // This should be set correctly based on window size
+                    near: camera_settings.near,
+                    far: camera_settings.far,
+                });
             }
-        } else if action == UIAction::CraftingMenu && **game_ui_state != GameUiState::InGameMenu {
-            if **game_ui_state == GameUiState::None {
-                next_ui_state.set(GameUiState::CraftingMenu);
-            } else {
-                next_ui_state.set(GameUiState::None);
+            ProjectionType::Orthographic => {
+                *projection = Projection::Orthographic(OrthographicProjection {
+                    scale: camera_settings.scale,
+                    near: camera_settings.near,
+                    far: camera_settings.far,
+                    viewport_origin: Vec2::new(0.5, 0.5),
+                    scaling_mode: ScalingMode::WindowSize,
+                    area: Rect::new(-1.0, -1.0, 1.0, 1.0),
+                });
             }
         }
     }
 }
-
 fn grab_cursor(mut windows: Query<&mut Window>) {
     let Ok(mut window) = windows.get_single_mut() else {
         return;
@@ -158,33 +150,4 @@ fn free_cursor(mut windows: Query<&mut Window>) {
     };
     window.cursor_options.visible = true;
     window.cursor_options.grab_mode = CursorGrabMode::None;
-}
-
-fn highlight_hover(
-    mut interaction_query: Query<(&Interaction, &mut BackgroundColor), Changed<Interaction>>,
-    mut cursor: Query<&mut CursorIcon>,
-) {
-    let mut any_interaction = false;
-    let mut hovering = false;
-    for (interaction, mut bg_color) in interaction_query.iter_mut() {
-        bg_color.0 = match interaction {
-            Interaction::Hovered | Interaction::Pressed => {
-                hovering = true;
-                Color::linear_rgba(0., 0., 0., 0.6)
-            }
-            _ => Color::linear_rgba(0., 0., 0., 0.0),
-        };
-        any_interaction = true;
-    }
-    if !any_interaction {
-        return;
-    }
-    let Ok(mut cursor_icon) = cursor.get_single_mut() else {
-        return;
-    };
-    *cursor_icon = CursorIcon::System(if hovering {
-        SystemCursorIcon::Pointer
-    } else {
-        SystemCursorIcon::Default
-    });
 }

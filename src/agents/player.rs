@@ -5,7 +5,6 @@ use super::{
 use crate::world::{BlockRayCastHit, Realm};
 use crate::{
     agents::{Gravity, Heading, Jumping, Velocity, AABB},
-    ui::CursorGrabbed,
     world::RenderDistance,
     Block,
 };
@@ -37,14 +36,7 @@ impl Plugin for PlayerPlugin {
             .add_systems(
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
-            )
-            .add_systems(
-                Update,
-                (toggle_fly, move_player)
-                    .chain()
-                    .run_if(in_state(CursorGrabbed)),
-            )
-            .add_systems(OnExit(CursorGrabbed), reset_heading);
+            );
     }
 }
 
@@ -91,7 +83,7 @@ pub enum DevCommand {
 pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
     let realm = Realm::Overworld;
     // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
-    let rd = RenderDistance(64);
+    let rd = RenderDistance(16);
     commands
         .spawn((
             Transform {
