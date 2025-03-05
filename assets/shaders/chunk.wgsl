@@ -40,7 +40,11 @@ struct CustomVertexOutput {
     @location(3) color: vec4<f32>,
     @location(4) face_light: vec4<f32>,
 };
-
+struct CustomFragmentOutput {
+    @location(0) color: vec4<f32>,
+    @location(1) depth: f32,  
+    @builtin(frag_depth) frag_depth: f32,
+}
 
 fn normal_from_id(id: u32) -> vec3<f32> {
     var n: vec3<f32>;
@@ -139,7 +143,7 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
 fn fragment(
     in: CustomVertexOutput,
     @builtin(front_facing) is_front: bool,
-) -> FragmentOutput {
+) -> CustomFragmentOutput {
     var vertex_output: VertexOutput;
     vertex_output.position = in.position;
     vertex_output.world_position = in.world_position;
@@ -166,13 +170,14 @@ fn fragment(
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
     let out = deferred_output(in, pbr_input);
 #else
-    var out: FragmentOutput;
+    var out: CustomFragmentOutput;
     // apply lighting
     out.color = apply_pbr_lighting(pbr_input);
 
     // apply in-shader post processing (fog, alpha-premultiply, and also tonemapping, debanding if the camera is non-hdr)
     // note this does not include fullscreen postprocessing effects like bloom.
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+    out.depth = in.position.z / in.position.w;
 #endif
 
     return out;

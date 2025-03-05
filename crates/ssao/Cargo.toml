@@ -1,0 +1,22 @@
+[package]
+name = "ssao"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.15.2" ,default-features = true, features = [
+    "bevy_winit",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_sprite",
+    "webgpu",
+    "bevy_debug_stepping",
+    "bevy_asset",
+    "bevy_scene",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+]  }
+bytemuck = "1.22.0"
+
+[lib]

@@ -11,9 +11,13 @@ use bevy::{
     render::{
         mesh::MeshVertexBufferLayoutRef,
         render_asset::RenderAssetUsages,
-        render_resource::{AsBindGroup, Extent3d, ShaderRef, TextureDimension, TextureFormat},
+        render_resource::{
+            AsBindGroup, CompareFunction, DepthBiasState, DepthStencilState, Extent3d, ShaderRef,
+            StencilState, TextureDimension, TextureFormat,
+        },
         storage::ShaderStorageBuffer,
     },
+    window::{PrimaryWindow, WindowResolution, WindowWrapper},
 };
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -54,8 +58,27 @@ impl TextureMapTrait for &DashMap<(Block, FaceSpecifier), usize> {
 
 fn build_tex_array(
     mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    window: Query<&Window>,
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>>,
 ) {
+    let window = window.get_single().unwrap();
+    let size = Extent3d {
+        width: window.physical_width(),
+        height: window.physical_height(),
+        depth_or_array_layers: 1,
+    };
+
+    // Create SSAO texture
+    let ssao_texture = Image::new_fill(
+        size,
+        TextureDimension::D2,
+        &[0; 4],
+        TextureFormat::R8Unorm, // Single channel, 8-bit normalized
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    let ssao_texture_handle = images.add(ssao_texture);
+
     let handle = materials.add(ExtendedMaterial {
         base: StandardMaterial {
             perceptual_roughness: 1.,
@@ -63,16 +86,33 @@ fn build_tex_array(
             alpha_mode: AlphaMode::AlphaToCoverage,
             ..Default::default()
         },
-        extension: ArrayTextureMaterial {},
+        extension: ArrayTextureMaterial {
+            ssao_texture: ssao_texture_handle.clone(),
+            // We'll get the depth texture from Bevy later
+            depth_texture: Handle::default(),
+        },
     });
+
+    commands.insert_resource(SSAOTexture(ssao_texture_handle));
     commands.insert_resource(BlockTextureArray(handle));
 }
+//for ssao
+#[derive(Resource)]
+struct SSAOTexture(Handle<Image>);
 
 #[derive(Resource)]
 pub struct BlockTextureArray(pub Handle<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>);
 
 #[derive(Asset, AsBindGroup, Debug, Clone, TypePath)]
-pub struct ArrayTextureMaterial {}
+pub struct ArrayTextureMaterial {
+    #[texture(20, dimension = "2d")]
+    #[sampler(21)]
+    pub depth_texture: Handle<Image>,
+
+    #[texture(22, dimension = "2d")]
+    #[sampler(23)]
+    pub ssao_texture: Handle<Image>,
+}
 
 impl MaterialExtension for ArrayTextureMaterial {
     fn vertex_shader() -> ShaderRef {
@@ -93,6 +133,14 @@ impl MaterialExtension for ArrayTextureMaterial {
             .0
             .get_layout(&[ATTRIBUTE_VOXEL_DATA.at_shader_location(0)])?;
         descriptor.vertex.buffers = vec![vertex_layout];
+
+        descriptor.depth_stencil = Some(DepthStencilState {
+            format: TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: CompareFunction::LessEqual,
+            stencil: StencilState::default(),
+            bias: DepthBiasState::default(),
+        });
         Ok(())
     }
 }

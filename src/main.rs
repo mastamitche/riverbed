@@ -2,7 +2,6 @@ mod agents;
 mod asset_processing;
 mod block;
 mod gen;
-mod items;
 mod render;
 mod sounds;
 mod ui;
