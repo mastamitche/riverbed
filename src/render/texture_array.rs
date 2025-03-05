@@ -52,24 +52,18 @@ impl TextureMapTrait for &DashMap<(Block, FaceSpecifier), usize> {
     }
 }
 
-fn build_tex_array(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>>,
-) {
-    let handle = materials.add(ExtendedMaterial {
-        base: StandardMaterial {
-            perceptual_roughness: 1.,
-            reflectance: 0.1,
-            alpha_mode: AlphaMode::AlphaToCoverage,
-            ..Default::default()
-        },
-        extension: ArrayTextureMaterial {},
+fn build_tex_array(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
+    let handle = materials.add(StandardMaterial {
+        perceptual_roughness: 1.,
+        reflectance: 0.1,
+        alpha_mode: AlphaMode::AlphaToCoverage,
+        ..Default::default()
     });
     commands.insert_resource(BlockTextureArray(handle));
 }
 
 #[derive(Resource)]
-pub struct BlockTextureArray(pub Handle<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>);
+pub struct BlockTextureArray(pub Handle<StandardMaterial>);
 
 #[derive(Asset, AsBindGroup, Debug, Clone, TypePath)]
 pub struct ArrayTextureMaterial {}
