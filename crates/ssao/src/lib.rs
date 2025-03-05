@@ -44,7 +44,6 @@ use bevy::{
 };
 use core::mem;
 
-const PREPROCESS_DEPTH_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(102258915420479);
 const SSAO_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(253938746510568);
 const SPATIAL_DENOISE_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(466162052558226);
 const SSAO_UTILS_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(366465052568786);
@@ -54,12 +53,6 @@ pub struct ScreenSpaceAmbientOcclusionPlugin;
 
 impl Plugin for ScreenSpaceAmbientOcclusionPlugin {
     fn build(&self, app: &mut App) {
-        load_internal_asset!(
-            app,
-            PREPROCESS_DEPTH_SHADER_HANDLE,
-            "preprocess_depth.wgsl",
-            Shader::from_wgsl
-        );
         load_internal_asset!(app, SSAO_SHADER_HANDLE, "ssao.wgsl", Shader::from_wgsl);
         load_internal_asset!(
             app,
@@ -240,44 +233,15 @@ impl ViewNode for SsaoNode {
     ) -> Result<(), NodeRunError> {
         let pipelines = world.resource::<SsaoPipelines>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let (
-            Some(camera_size),
-            Some(preprocess_depth_pipeline),
-            Some(spatial_denoise_pipeline),
-            Some(ssao_pipeline),
-        ) = (
+        let (Some(camera_size), Some(spatial_denoise_pipeline), Some(ssao_pipeline)) = (
             camera.physical_viewport_size,
-            pipeline_cache.get_compute_pipeline(pipelines.preprocess_depth_pipeline),
             pipeline_cache.get_compute_pipeline(pipelines.spatial_denoise_pipeline),
             pipeline_cache.get_compute_pipeline(pipeline_id.0),
-        )
-        else {
+        ) else {
             return Ok(());
         };
 
         render_context.command_encoder().push_debug_group("ssao");
-
-        {
-            let mut preprocess_depth_pass =
-                render_context
-                    .command_encoder()
-                    .begin_compute_pass(&ComputePassDescriptor {
-                        label: Some("ssao_preprocess_depth_pass"),
-                        timestamp_writes: None,
-                    });
-            preprocess_depth_pass.set_pipeline(preprocess_depth_pipeline);
-            preprocess_depth_pass.set_bind_group(0, &bind_groups.preprocess_depth_bind_group, &[]);
-            preprocess_depth_pass.set_bind_group(
-                1,
-                &bind_groups.common_bind_group,
-                &[view_uniform_offset.offset],
-            );
-            preprocess_depth_pass.dispatch_workgroups(
-                camera_size.x.div_ceil(16),
-                camera_size.y.div_ceil(16),
-                1,
-            );
-        }
 
         {
             let mut ssao_pass =
@@ -326,11 +290,9 @@ impl ViewNode for SsaoNode {
 
 #[derive(Resource)]
 struct SsaoPipelines {
-    preprocess_depth_pipeline: CachedComputePipelineId,
     spatial_denoise_pipeline: CachedComputePipelineId,
 
     common_bind_group_layout: BindGroupLayout,
-    preprocess_depth_bind_group_layout: BindGroupLayout,
     ssao_bind_group_layout: BindGroupLayout,
     spatial_denoise_bind_group_layout: BindGroupLayout,
 
@@ -396,21 +358,6 @@ impl FromWorld for SsaoPipelines {
             ),
         );
 
-        let preprocess_depth_bind_group_layout = render_device.create_bind_group_layout(
-            "ssao_preprocess_depth_bind_group_layout",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
-                (
-                    texture_depth_2d(),
-                    texture_storage_2d(TextureFormat::R16Float, StorageTextureAccess::WriteOnly),
-                    texture_storage_2d(TextureFormat::R16Float, StorageTextureAccess::WriteOnly),
-                    texture_storage_2d(TextureFormat::R16Float, StorageTextureAccess::WriteOnly),
-                    texture_storage_2d(TextureFormat::R16Float, StorageTextureAccess::WriteOnly),
-                    texture_storage_2d(TextureFormat::R16Float, StorageTextureAccess::WriteOnly),
-                ),
-            ),
-        );
-
         let ssao_bind_group_layout = render_device.create_bind_group_layout(
             "ssao_ssao_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
@@ -439,20 +386,6 @@ impl FromWorld for SsaoPipelines {
             ),
         );
 
-        let preprocess_depth_pipeline =
-            pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-                label: Some("ssao_preprocess_depth_pipeline".into()),
-                layout: vec![
-                    preprocess_depth_bind_group_layout.clone(),
-                    common_bind_group_layout.clone(),
-                ],
-                push_constant_ranges: vec![],
-                shader: PREPROCESS_DEPTH_SHADER_HANDLE,
-                shader_defs: Vec::new(),
-                entry_point: "preprocess_depth".into(),
-                zero_initialize_workgroup_memory: false,
-            });
-
         let spatial_denoise_pipeline =
             pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
                 label: Some("ssao_spatial_denoise_pipeline".into()),
@@ -468,11 +401,9 @@ impl FromWorld for SsaoPipelines {
             });
 
         Self {
-            preprocess_depth_pipeline,
             spatial_denoise_pipeline,
 
             common_bind_group_layout,
-            preprocess_depth_bind_group_layout,
             ssao_bind_group_layout,
             spatial_denoise_bind_group_layout,
 
@@ -676,7 +607,6 @@ fn prepare_ssao_pipelines(
 #[derive(Component)]
 struct SsaoBindGroups {
     common_bind_group: BindGroup,
-    preprocess_depth_bind_group: BindGroup,
     ssao_bind_group: BindGroup,
     spatial_denoise_bind_group: BindGroup,
 }
@@ -725,19 +655,6 @@ fn prepare_ssao_bind_groups(
                 })
         };
 
-        let preprocess_depth_bind_group = render_device.create_bind_group(
-            "ssao_preprocess_depth_bind_group",
-            &pipelines.preprocess_depth_bind_group_layout,
-            &BindGroupEntries::sequential((
-                prepass_textures.depth_view().unwrap(),
-                &create_depth_view(0),
-                &create_depth_view(1),
-                &create_depth_view(2),
-                &create_depth_view(3),
-                &create_depth_view(4),
-            )),
-        );
-
         let ssao_bind_group = render_device.create_bind_group(
             "ssao_ssao_bind_group",
             &pipelines.ssao_bind_group_layout,
@@ -766,7 +683,6 @@ fn prepare_ssao_bind_groups(
 
         commands.entity(entity).insert(SsaoBindGroups {
             common_bind_group,
-            preprocess_depth_bind_group,
             ssao_bind_group,
             spatial_denoise_bind_group,
         });
