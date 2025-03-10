@@ -25,7 +25,7 @@ const MASK_6_u32: u32 = 0b111111;
 const MASK_XYZ: u64 = 0b111111_111111_111111;
 
 pub const ATTRIBUTE_AO_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("AO_Data", 455566112, VertexFormat::Float32);
+    MeshVertexAttribute::new("AO_Data", 455566112, VertexFormat::Uint32);
 
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
@@ -121,23 +121,23 @@ impl Chunk {
                     colors.push(color);
 
                     // Add AO pattern and rotation as a new attribute
-                    // We're using a float value where:
-                    // - integer part = pattern index (0-10)
-                    // - fractional part = rotation/4 (0.0, 0.25, 0.5, 0.75)
-                    let ao_value = match ao_pattern {
-                        AOPattern::None => 0.0,
-                        AOPattern::OneCorner => 1.0,
-                        AOPattern::TwoCorners => 2.0,
-                        AOPattern::TwoOppositeCorners => 3.0,
-                        AOPattern::ThreeCorners => 4.0,
-                        AOPattern::FourCorners => 5.0,
-                        AOPattern::OneEdge => 6.0,
-                        AOPattern::OppositeEdges => 7.0,
-                        AOPattern::TwoAdjacentEdges => 8.0,
-                        AOPattern::ThreeEdges => 9.0,
-                        AOPattern::FourEdges => 10.0,
-                    } + (ao_rotation as f32) * 0.25;
-
+                    // We're packing both into a single u32 where:
+                    // - pattern is stored in the lower 4 bits (0-15)
+                    // - rotation is stored in the next 2 bits (0-3)
+                    let pattern_value = match ao_pattern {
+                        AOPattern::None => 0u32,
+                        AOPattern::OneCorner => 1u32,
+                        AOPattern::TwoCorners => 2u32,
+                        AOPattern::TwoOppositeCorners => 3u32,
+                        AOPattern::ThreeCorners => 4u32,
+                        AOPattern::FourCorners => 5u32,
+                        AOPattern::OneEdge => 6u32,
+                        AOPattern::OppositeEdges => 7u32,
+                        AOPattern::TwoAdjacentEdges => 8u32,
+                        AOPattern::ThreeEdges => 9u32,
+                        AOPattern::FourEdges => 10u32,
+                    };
+                    let ao_value = pattern_value | ((ao_rotation as u32) << 4);
                     ao_data.push(ao_value);
                 }
             }

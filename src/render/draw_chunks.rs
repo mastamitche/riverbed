@@ -191,7 +191,7 @@ pub fn pull_meshes(
             }
         } else if blocks.chunks.contains_key(&chunk_pos) {
             // Create a new entity with the mesh and material
-        println!("spawn mesh for {:?} {:?}", chunk_pos, face);
+        // println!("spawn mesh for {:?} {:?}", chunk_pos, face);
             let ent = commands
                 .spawn((
                     Mesh3d(mesh_handle),

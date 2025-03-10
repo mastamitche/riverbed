@@ -70,7 +70,6 @@ fn rotate_uv(uv: vec2<f32>, rotation: f32) -> vec2<f32> {
 // Sample the appropriate AO texture based on pattern
 fn sample_ao_texture(uv: vec2<f32>, pattern: f32, rotation: f32) -> f32 {
     let rotated_uv = rotate_uv(uv, rotation);
-    
     if (pattern < 0.5) {
         return textureSample(ao_none_texture, ao_none_sampler, rotated_uv).r;
     } else if (pattern < 1.5) {
@@ -102,7 +101,7 @@ struct CustomVertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) color: vec4<f32>,
     @location(4) instance_index: u32,
-    @location(5) ao_data: f32,
+    @location(5) ao_data: u32,
 }
 
 @vertex
@@ -111,7 +110,7 @@ fn vertex(
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     @location(5) color: vec4<f32>,
-    @location(6) ao_data: f32,
+    @location(6) ao_data: u32,
     @builtin(instance_index) instance_index: u32,
 ) -> CustomVertexOutput {
     // Use Bevy's standard vertex output generation
@@ -141,16 +140,20 @@ fn fragment(
     // Retrieve our AO data from where we stored it
     let ao_data = in.ao_data;
     
-    // Extract pattern and rotation from the ao_data
-    // Assuming ao_data format: pattern * 10 + rotation
-    let pattern = floor(ao_data / 10.0);
-    let rotation = ao_data - (pattern * 10.0);
+    // Extract pattern and rotation from the packed u32
+    // Pattern is in the lower 4 bits (0-15)
+    // Rotation is in the next 2 bits (0-3)
+    let pattern = f32(ao_data & 0xFu);
+    let rotation = f32((ao_data >> 4u) & 0x3u);
     
-    // For debugging, return flat red to confirm the shader is working
-    return vec4(1.0, 0.0, 0.0, 1.0);
+    // Debug: directly sample and visualize the AO texture
+    // This will help us see if the textures are being loaded correctly
+    let ao_value = sample_ao_texture(in.uv, pattern, rotation);
+    return vec4(ao_value, ao_value, ao_value, 1.0);
     
-    // Once the flat red is working, uncomment this section:
+    // The rest of the shader code is temporarily commented out for debugging
     /*
+    // Convert our CustomVertexOutput to Bevy's standard VertexOutput
     var vert: VertexOutput;
     vert.position = in.position;
     vert.world_position = in.world_position;
@@ -165,8 +168,9 @@ fn fragment(
     // Sample the appropriate AO texture
     let ao_factor = sample_ao_texture(in.uv, pattern, rotation);
     
-    // Apply AO to the base color and handle alpha
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, vec4(pbr_input.material.base_color.rgb * ao_factor, pbr_input.material.base_color.a));
+    // Apply AO to the base color and handle alpha discard if needed
+    pbr_input.material.base_color = alpha_discard(pbr_input.material, 
+        vec4(pbr_input.material.base_color.rgb * ao_factor, pbr_input.material.base_color.a));
     
     // Apply PBR lighting
     var output_color = apply_pbr_lighting(pbr_input);

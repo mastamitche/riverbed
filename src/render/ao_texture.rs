@@ -24,8 +24,8 @@ impl Default for AOTextureConfig {
     fn default() -> Self {
         Self {
             resolution: 256,
-            strength: 0.5,
-            length: 0.3,
+            strength: 1.0,
+            length: 0.6,
         }
     }
 }
