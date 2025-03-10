@@ -1,3 +1,4 @@
+pub mod ao_texture;
 pub mod camera;
 mod chunk_culling;
 mod draw_chunks;
@@ -6,7 +7,7 @@ mod mesh_chunks;
 mod mesh_utils;
 mod shared_load_area;
 mod sky;
-mod texture_array;
+pub mod texture_array;
 mod texture_load;
 use bevy::prelude::Plugin;
 pub use texture_load::*;
@@ -18,6 +19,8 @@ impl Plugin for Render {
         app.add_plugins(draw_chunks::Draw3d)
             .add_plugins(sky::SkyPlugin)
             .add_plugins(camera::Camera3dPlugin)
-            .add_plugins(effects::EffectsPlugin);
+            .add_plugins(effects::EffectsPlugin)
+            .add_plugins(ao_texture::AOTexturePlugin)
+            .add_plugins(texture_array::AOExtensionMaterialPlugin);
     }
 }

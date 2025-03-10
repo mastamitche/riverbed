@@ -10,7 +10,7 @@ members = [
 ]
 
 [dependencies]
-bevy = { version = "0.15.2" ,default-features = true, features = [
+bevy = { version = "0.15" ,default-features = true, features = [
     "bevy_winit",
     "bevy_core_pipeline",
     "bevy_render",
@@ -23,9 +23,8 @@ bevy = { version = "0.15.2" ,default-features = true, features = [
     "bevy_text",
     "bevy_ui",
 ]  }
-bevy_dev_tools = "0.15.0"
+bevy_dev_tools = "0.15"
 bevy_atmosphere = "*"
-binary-greedy-meshing = "*"
 confy = "*"
 leafwing-input-manager = "*"
 rand = "*"
@@ -52,6 +51,7 @@ regex = "*"
 json5 = "*"
 bevy_egui = "0.31"
 riverbed_closest = { path = "crates/riverbed_closest", version = "*" }
+binary-greedy-meshing = { path = "crates/binary-greedy-meshing", version = "*" }
 
 [build-dependencies]
 riverbed_block_def = { path = "crates/riverbed_block_def", version = "*" }

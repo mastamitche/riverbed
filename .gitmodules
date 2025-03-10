@@ -1,0 +1,3 @@
+[submodule "crates/binary-greedy-meshing"]
+	path = crates/binary-greedy-meshing
+	url = git@github.com:mastamitche/binary-greedy-meshing.git

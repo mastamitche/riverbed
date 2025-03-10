@@ -11,7 +11,6 @@ use bevy::{
 };
 use binary_greedy_meshing as bgm;
 
-use super::texture_array::TextureMapTrait;
 use crate::world::CHUNK_S1;
 use crate::{
     block::Face,
@@ -19,27 +18,14 @@ use crate::{
     Block,
 };
 
+use super::ao_texture::{determine_ao_pattern, AOPattern};
+
 const MASK_6: u64 = 0b111111;
 const MASK_6_u32: u32 = 0b111111;
 const MASK_XYZ: u64 = 0b111111_111111_111111;
-/// ## Compressed voxel vertex data
-/// first u32 (vertex dependant):
-///     - chunk position: 3x6 bits (33 values)
-///     - texture coords: 2x6 bits (33 values)
-///     - ambiant occlusion?: 2 bits (4 values)
-/// `0bao_vvvvvv_uuuuuu_zzzzzz_yyyyyy_xxxxxx`
-///
-/// second u32 (vertex agnostic):
-///     - normals: 3 bits (6 values) = face
-///     - color: 9 bits (3 r, 3 g, 3 b)
-///     - texture layer: 16 bits
-///     - light level: 4 bits (16 value)
-///
-/// `0bllll_iiiiiiiiiiiiiiii_ccccccccc_nnn`
-pub const ATTRIBUTE_VOXEL_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Uint32x2);
-pub const ATTRIBUTE_INSTANCE_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("InstanceData", 48757582, VertexFormat::Uint32x2);
+
+pub const ATTRIBUTE_AO_DATA: MeshVertexAttribute =
+    MeshVertexAttribute::new("AO_Data", 455566112, VertexFormat::Float32);
 
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
@@ -63,11 +49,7 @@ impl Chunk {
 
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(
-        &self,
-        texture_map: impl TextureMapTrait,
-        lod: usize,
-    ) -> [Option<Mesh>; 6] {
+    pub fn create_face_meshes(&self, lod: usize) -> [Option<Mesh>; 6] {
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         let voxels = self.voxel_data_lod(lod);
@@ -84,29 +66,48 @@ impl Chunk {
             }));
         bgm::mesh(&voxels, &mut mesh_data, transparents);
         let mut meshes = core::array::from_fn(|_| None);
+
+        // Chunk size plus padding for AO calculations
+        let cs_p = CHUNK_S1 + 2; // Add 2 for padding
+
         for (face_n, quads) in mesh_data.quads.iter().enumerate() {
             let mut positions = Vec::with_capacity(quads.len() * 4);
             let mut normals = Vec::with_capacity(quads.len() * 4);
             let mut uvs = Vec::with_capacity(quads.len() * 4);
             let mut colors = Vec::with_capacity(quads.len() * 4);
+            let mut ao_data = Vec::with_capacity(quads.len() * 4);
             let indices = bgm::indices(quads.len());
             let face: Face = face_n.into();
             let face_normal = face.n().map(|n| n as f32);
+
             for quad in quads {
                 let voxel_i = (quad >> 32) as usize;
                 let w = MASK_6 & (quad >> 18);
                 let h = MASK_6 & (quad >> 24);
                 let xyz = MASK_XYZ & quad;
                 let block = self.palette[voxel_i];
-                // let texture_index = texture_map.get_texture_index(block, face) as f32;
+
+                // Extract x, y, z from packed xyz for AO calculation
+                let x = xyz & MASK_6;
+                let y = (xyz >> 6) & MASK_6;
+                let z = (xyz >> 12) & MASK_6;
+
+                // Convert to linearized index for the AO calculation
+                let index = pad_linearize((x + 1) as usize, (y + 1) as usize, (z + 1) as usize);
+
+                // Determine AO pattern and rotation for this quad
+                let (ao_pattern, ao_rotation) = determine_ao_pattern(face, index, &voxels, cs_p);
+
                 let color = match (block, face) {
                     (Block::GrassBlock, Face::Up) => [0.0, 1.0, 0.0, 1.0],
                     (Block::SeaBlock, _) => [0.0, 0.0, 1.0, 1.0],
                     (block, _) if block.is_foliage() => [0.0, 0.5, 0.0, 1.0],
                     _ => [1.0, 1.0, 1.0, 1.0],
                 };
+
                 let packed_vertices =
                     face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
+
                 for packed_vertex in packed_vertices.iter() {
                     let x = (packed_vertex & MASK_6_u32) as f32;
                     let y = ((packed_vertex >> 6) & MASK_6_u32) as f32;
@@ -118,8 +119,29 @@ impl Chunk {
                     normals.push(face_normal);
                     uvs.push([u / 63.0, v / 63.0]); // Normalize UV coordinates
                     colors.push(color);
+
+                    // Add AO pattern and rotation as a new attribute
+                    // We're using a float value where:
+                    // - integer part = pattern index (0-10)
+                    // - fractional part = rotation/4 (0.0, 0.25, 0.5, 0.75)
+                    let ao_value = match ao_pattern {
+                        AOPattern::None => 0.0,
+                        AOPattern::OneCorner => 1.0,
+                        AOPattern::TwoCorners => 2.0,
+                        AOPattern::TwoOppositeCorners => 3.0,
+                        AOPattern::ThreeCorners => 4.0,
+                        AOPattern::FourCorners => 5.0,
+                        AOPattern::OneEdge => 6.0,
+                        AOPattern::OppositeEdges => 7.0,
+                        AOPattern::TwoAdjacentEdges => 8.0,
+                        AOPattern::ThreeEdges => 9.0,
+                        AOPattern::FourEdges => 10.0,
+                    } + (ao_rotation as f32) * 0.25;
+
+                    ao_data.push(ao_value);
                 }
             }
+
             meshes[face_n] = Some(
                 Mesh::new(
                     PrimitiveTopology::TriangleList,
@@ -129,6 +151,10 @@ impl Chunk {
                 .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
                 .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
+                .with_inserted_attribute(
+                    ATTRIBUTE_AO_DATA, // New AO attribute
+                    ao_data,
+                )
                 .with_inserted_indices(Indices::U32(indices)),
             )
         }

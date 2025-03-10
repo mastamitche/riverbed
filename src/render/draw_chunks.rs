@@ -1,7 +1,7 @@
+use super::ao_texture::AOTextureArray;
 use super::chunk_culling::chunk_culling;
 use super::shared_load_area::{setup_shared_load_area, update_shared_load_area, SharedLoadArea};
-use super::texture_array::BlockTextureArray;
-use super::texture_array::{TextureArrayPlugin, TextureMap};
+use super::texture_array::{AOAssigned, AOExtensionMaterialResource};
 use crate::block::Face;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
@@ -115,14 +115,13 @@ fn setup_mesh_thread(
     mut commands: Commands,
     blocks: Res<VoxelWorld>,
     shared_load_area: Res<SharedLoadArea>,
-    texture_map: Res<TextureMap>,
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
     let chunks = Arc::clone(&blocks.chunks);
     let (mesh_sender, mesh_reciever) = unbounded();
     commands.insert_resource(MeshReciever(mesh_reciever));
     let shared_load_area = Arc::clone(&shared_load_area.0);
-    let texture_map = Arc::clone(&texture_map.0);
+
     thread_pool
         .spawn(async move {
             loop {
@@ -136,7 +135,7 @@ fn setup_mesh_thread(
                 let Some(chunk) = chunks.get(&chunk_pos) else {
                     continue;
                 };
-                let face_meshes = chunk.create_face_meshes(&*texture_map, lod);
+                let face_meshes = chunk.create_face_meshes(lod);
                 for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                     let face = i.into();
                     if mesh_sender
@@ -157,7 +156,7 @@ pub fn pull_meshes(
     mut chunk_ents: ResMut<ChunkEntities>,
     mut mesh_query: Query<(&mut Mesh3d, &mut LOD)>,
     mut meshes: ResMut<Assets<Mesh>>,
-    block_tex_array: Res<BlockTextureArray>,
+    ao_extension_material: Res<AOExtensionMaterialResource>,
     load_area: Res<PlayerArea>,
     blocks: Res<VoxelWorld>,
 ) {
@@ -177,21 +176,26 @@ pub fn pull_meshes(
             }
             continue;
         };
-        //println!("Mesh available");
+
+        // Add the mesh to the assets
+        let mesh_handle = meshes.add(mesh);
         let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
+
         if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
             if let Ok((mut handle, mut old_lod)) = mesh_query.get_mut(*ent) {
-                handle.0 = meshes.add(mesh);
+                handle.0 = mesh_handle;
                 *old_lod = lod;
             } else {
                 // the entity is not instanciated yet, we put it back
                 println!("entity wasn't ready to recieve updated mesh");
             }
         } else if blocks.chunks.contains_key(&chunk_pos) {
+            // Create a new entity with the mesh and material
+        println!("spawn mesh for {:?} {:?}", chunk_pos, face);
             let ent = commands
                 .spawn((
-                    Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(block_tex_array.0.clone_weak()),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(ao_extension_material.0.clone_weak()),
                     Transform::from_translation(
                         Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32)
                             * CHUNK_S1 as f32,
@@ -206,7 +210,6 @@ pub fn pull_meshes(
         }
     }
 }
-
 pub fn on_col_unload(
     mut commands: Commands,
     mut ev_unload: EventReader<ColUnloadEvent>,
@@ -241,8 +244,7 @@ pub struct Draw3d;
 
 impl Plugin for Draw3d {
     fn build(&self, app: &mut App) {
-        app.add_plugins(TextureArrayPlugin)
-            .insert_resource(ChunkEntities::new())
+        app.insert_resource(ChunkEntities::new())
             .add_systems(
                 Startup,
                 (
@@ -256,7 +258,10 @@ impl Plugin for Draw3d {
             )
             .add_systems(Update, update_shared_load_area)
             .add_systems(Update, mark_lod_remesh)
-            .add_systems(Update, pull_meshes)
+            .add_systems(
+                Update,
+                pull_meshes.run_if(resource_exists::<AOExtensionMaterialResource>),
+            )
             .add_systems(Update, on_col_unload)
             //.add_systems(Update, chunk_aabb_gizmos)
             .add_systems(PostUpdate, chunk_culling);

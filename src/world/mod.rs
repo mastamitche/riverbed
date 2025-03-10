@@ -9,18 +9,21 @@ mod voxel_world;
 use self::load_orders::{
     assign_load_area, on_render_distance_change, process_unload_orders, update_load_area,
 };
+use crate::render::texture_array::AOAssigned;
 use crate::{agents::PlayerSpawn, gen::setup_gen_thread};
 use bevy::{
     app::Startup,
     ecs::schedule::{apply_deferred, IntoSystemConfigs, SystemSet},
     prelude::{Plugin, Update},
 };
+
 pub use chunk::*;
 pub use load_area::{range_around, PlayerArea, RenderDistance};
 pub use load_orders::{BlockEntities, ColUnloadEvent, LoadOrders};
 pub use pos::*;
 pub use realm::*;
 pub use voxel_world::*;
+
 pub const CHUNK_S1: usize = 62;
 pub const CHUNK_S2: usize = CHUNK_S1.pow(2);
 pub const CHUNKP_S1: usize = CHUNK_S1 + 2;

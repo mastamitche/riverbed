@@ -1,4 +1,6 @@
 use crate::agents::{PlayerControlled, PlayerSpawn, AABB};
+use bevy::core_pipeline::experimental::taa::TemporalAntiAliasing;
+use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::render::camera::ScalingMode;
 use bevy::window::CursorGrabMode;
 use bevy::{pbr::VolumetricFog, prelude::*};
@@ -59,18 +61,15 @@ pub fn cam_setup(
             .looking_at(Vec3::new(aabb.0.x / 2., 0.0, aabb.0.z / 2.), Vec3::Y),
             Projection::Perspective(PerspectiveProjection {
                 far: 10000.,
-                fov: PI / 3.,
+                fov: 3.,
                 ..Default::default()
             }),
-            DistanceFog {
-                color: Color::linear_rgba(0.70, 0.85, 0.95, 1.0),
-                falloff: FogFalloff::Linear {
-                    start: 100.0,
-                    end: 10000.0,
-                },
-                ..default()
-            },
-            VolumetricFog::default(),
+            Msaa::Off,
+            // ScreenSpaceAmbientOcclusion {
+            //     quality_level: bevy::pbr::ScreenSpaceAmbientOcclusionQualityLevel::Ultra,
+            //     constant_object_thickness: 10.,
+            // },
+            // TemporalAntiAliasing::default(),
         ))
         .insert(InputManagerBundle::<CameraMovement> {
             input_map,
