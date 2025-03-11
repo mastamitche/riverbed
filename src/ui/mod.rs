@@ -20,10 +20,16 @@ impl Plugin for UIPlugin {
             distance: 100.0,
             pitch: initial_pitch,
             yaw: 0.0,
+            ambient_strength: 800.0,
         })
         .add_systems(
             Update,
-            (ui_system, adjust_camera_angle, update_camera_projection),
+            (
+                ui_system,
+                adjust_camera_angle,
+                update_camera_projection,
+                update_lighting,
+            ),
         );
     }
 }
@@ -37,6 +43,8 @@ pub struct CameraSettings {
     distance: f32,
     pitch: f32,
     yaw: f32,
+    //lighting
+    ambient_strength: f32,
 }
 
 pub fn adjust_camera_angle(
@@ -77,10 +85,17 @@ fn ui_system(mut contexts: EguiContexts, mut camera_settings: ResMut<CameraSetti
         // ui.add(egui::Slider::new(&mut camera_settings.far, 100.0..=10000.0).text("Far"));
 
         ui.add(egui::Slider::new(&mut camera_settings.fov, 0.0..=45.0).text("FOV"));
-            
+    });
+    egui::Window::new("Lighting Settings").show(contexts.ctx_mut(), |ui| {
+        ui.add(
+            egui::Slider::new(&mut camera_settings.ambient_strength, 0.0..=2000.0)
+                .text("Ambient Strength"),
+        );
     });
 }
-
+fn update_lighting(camera_settings: Res<CameraSettings>, mut ambient_light: ResMut<AmbientLight>) {
+    ambient_light.brightness = camera_settings.ambient_strength;
+}
 fn update_camera_projection(
     camera_settings: Res<CameraSettings>,
     mut query: Query<&mut Projection, With<Camera3d>>,
