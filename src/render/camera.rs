@@ -7,6 +7,8 @@ use bevy::{pbr::VolumetricFog, prelude::*};
 use leafwing_input_manager::prelude::*;
 use std::f32::consts::PI;
 
+use super::effects::NormalAoSettings;
+
 const CAMERA_PAN_RATE: f32 = 0.06;
 
 pub struct Camera3dPlugin;
@@ -66,6 +68,7 @@ pub fn cam_setup(
             }),
             Msaa::Off
         ))
+        .insert(NormalAoSettings::default())
         .insert(TemporalAntiAliasing::default())
         .insert(ScreenSpaceAmbientOcclusion{
             quality_level: ScreenSpaceAmbientOcclusionQualityLevel::Low,

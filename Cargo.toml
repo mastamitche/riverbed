@@ -52,6 +52,7 @@ json5 = "*"
 bevy_egui = "0.31"
 riverbed_closest = { path = "crates/riverbed_closest", version = "*" }
 binary-greedy-meshing = { path = "crates/binary-greedy-meshing", version = "*" }
+bytemuck = { version = "1.22.0", features = ["derive"] }
 
 
 [build-dependencies]
