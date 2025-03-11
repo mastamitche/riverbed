@@ -44,10 +44,7 @@ impl Chunk {
 
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(
-        &self,
-        lod: usize,
-    ) -> [Option<Mesh>; 6] {
+    pub fn create_face_meshes(&self, lod: usize) -> [Option<Mesh>; 6] {
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         let voxels = self.voxel_data_lod(lod);
@@ -73,18 +70,48 @@ impl Chunk {
             let face: Face = face_n.into();
             let face_normal = face.n().map(|n| n as f32);
             for quad in quads {
-                let voxel_i = (quad >> 32) as usize;
+                let voxel_i: u64 = (quad >> 32) as u64;
                 let w = MASK_6 & (quad >> 18);
                 let h = MASK_6 & (quad >> 24);
                 let xyz = MASK_XYZ & quad;
-                let block = self.palette[voxel_i];
-                
-                let color = match (block, face) {
-                    (Block::GrassBlock, Face::Up) => [0.0, 1.0, 0.0, 1.0],
-                    (Block::SeaBlock, _) => [0.0, 0.0, 1.0, 1.0],
-                    (block, _) if block.is_foliage() => [0.0, 0.5, 0.0, 1.0],
-                    _ => [1.0, 1.0, 1.0, 1.0],
+                // Extract AO value from the high 4 bits of the quad
+                let ao = ((quad >> 60) & 0x3) as u8;
+                //let block = self.palette[voxel_i];
+                // println!("Voxel i {}", voxel_i);
+                // Base color calculation
+                let base_color = match voxel_i {
+                    0 => [1.0, 1.0, 1.0, 1.0],
+                    1 => [0.0, 1.0, 0.0, 1.0],
+                    2 => [0.0, 0.0, 1.0, 1.0],
+                    3 => [0.0, 1.0, 1.0, 1.0],
+                    4 => [1.0, 0.0, 0.0, 1.0],
+                    _ => [0.0, 0.0, 0.0, 1.0],
                 };
+                // match (block, face) {
+                //     (Block::GrassBlock, Face::Up) => [0.0, 1.0, 0.0, 1.0],
+                //     (Block::SeaBlock, _) => [0.0, 0.0, 1.0, 1.0],
+                //     (block, _) if block.is_foliage() => [0.0, 0.5, 0.0, 1.0],
+                //     _ => [1.0, 1.0, 1.0, 1.0],
+                // };
+
+                // Apply ambient occlusion to darken vertices
+                // AO is 0-3 where 3 is no occlusion and 0 is full occlusion
+                let ao_factor = match ao {
+                    3 => 1.0, // No occlusion
+                    2 => 0.8, // Light occlusion
+                    1 => 0.6, // Medium occlusion
+                    0 => 0.4, // Heavy occlusion
+                    _ => 1.0, // Fallback (shouldn't happen)
+                };
+
+                // Apply AO darkening to the color
+                let color = [
+                    base_color[0] * ao_factor,
+                    base_color[1] * ao_factor,
+                    base_color[2] * ao_factor,
+                    base_color[3],
+                ];
+
                 let packed_vertices =
                     face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
                 for packed_vertex in packed_vertices.iter() {
