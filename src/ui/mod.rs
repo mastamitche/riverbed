@@ -14,9 +14,7 @@ impl Plugin for UIPlugin {
         let initial_pitch_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
         let initial_pitch: f32 = initial_pitch_degrees.to_radians();
         app.insert_resource(CameraSettings {
-            projection_type: ProjectionType::Orthographic,
-            fov: 60.0,
-            scale: 5.0,
+            fov: 10.0,
             near: 0.1,
             far: 10000.0,
             distance: 100.0,
@@ -29,19 +27,10 @@ impl Plugin for UIPlugin {
         );
     }
 }
-#[derive(PartialEq)]
-enum ProjectionType {
-    Perspective,
-    Orthographic,
-}
-
 #[derive(Resource)]
 pub struct CameraSettings {
-    projection_type: ProjectionType,
     // Perspective settings
     fov: f32,
-    // Orthographic settings
-    scale: f32,
     // Shared settings
     near: f32,
     far: f32,
@@ -81,31 +70,14 @@ pub fn adjust_camera_angle(
 
 fn ui_system(mut contexts: EguiContexts, mut camera_settings: ResMut<CameraSettings>) {
     egui::Window::new("Camera Settings").show(contexts.ctx_mut(), |ui| {
-        ui.radio_value(
-            &mut camera_settings.projection_type,
-            ProjectionType::Perspective,
-            "Perspective",
-        );
-        ui.radio_value(
-            &mut camera_settings.projection_type,
-            ProjectionType::Orthographic,
-            "Orthographic",
-        );
-
         ui.add(egui::Slider::new(&mut camera_settings.distance, 1.0..=3000.0).text("Height"));
         ui.add(egui::Slider::new(&mut camera_settings.pitch, 0.0..=90.0).text("Pitch"));
         ui.add(egui::Slider::new(&mut camera_settings.yaw, 0.0..=360.0).text("Yaw"));
         // ui.add(egui::Slider::new(&mut camera_settings.near, 0.1..=100.0).text("Near"));
         // ui.add(egui::Slider::new(&mut camera_settings.far, 100.0..=10000.0).text("Far"));
 
-        match camera_settings.projection_type {
-            ProjectionType::Perspective => {
-                ui.add(egui::Slider::new(&mut camera_settings.fov, 0.0..=120.0).text("FOV"));
-            }
-            ProjectionType::Orthographic => {
-                ui.add(egui::Slider::new(&mut camera_settings.scale, 0.1..=20.0).text("Scale"));
-            }
-        }
+        ui.add(egui::Slider::new(&mut camera_settings.fov, 0.0..=45.0).text("FOV"));
+            
     });
 }
 
@@ -114,26 +86,12 @@ fn update_camera_projection(
     mut query: Query<&mut Projection, With<Camera3d>>,
 ) {
     for mut projection in query.iter_mut() {
-        match camera_settings.projection_type {
-            ProjectionType::Perspective => {
-                *projection = Projection::Perspective(PerspectiveProjection {
-                    fov: camera_settings.fov.to_radians(),
-                    aspect_ratio: 1.0, // This should be set correctly based on window size
-                    near: camera_settings.near,
-                    far: camera_settings.far,
-                });
-            }
-            ProjectionType::Orthographic => {
-                *projection = Projection::Orthographic(OrthographicProjection {
-                    scale: camera_settings.scale,
-                    near: camera_settings.near,
-                    far: camera_settings.far,
-                    viewport_origin: Vec2::new(0.5, 0.5),
-                    scaling_mode: ScalingMode::WindowSize,
-                    area: Rect::new(-1.0, -1.0, 1.0, 1.0),
-                });
-            }
-        }
+        *projection = Projection::Perspective(PerspectiveProjection {
+            fov: camera_settings.fov.to_radians(),
+            aspect_ratio: 1.0, // This should be set correctly based on window size
+            near: camera_settings.near,
+            far: camera_settings.far,
+        });
     }
 }
 fn grab_cursor(mut windows: Query<&mut Window>) {

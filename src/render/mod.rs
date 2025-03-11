@@ -7,9 +7,7 @@ mod mesh_utils;
 mod shared_load_area;
 mod sky;
 mod texture_array;
-mod texture_load;
 use bevy::prelude::Plugin;
-pub use texture_load::*;
 
 pub struct Render;
 

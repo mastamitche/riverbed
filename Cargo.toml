@@ -10,7 +10,7 @@ members = [
 ]
 
 [dependencies]
-bevy = { version = "0.15.2" ,default-features = true, features = [
+bevy = { version = "0.15" ,default-features = true, features = [
     "bevy_winit",
     "bevy_core_pipeline",
     "bevy_render",
@@ -23,7 +23,7 @@ bevy = { version = "0.15.2" ,default-features = true, features = [
     "bevy_text",
     "bevy_ui",
 ]  }
-bevy_dev_tools = "0.15.0"
+bevy_dev_tools = "0.15"
 bevy_atmosphere = "*"
 confy = "*"
 leafwing-input-manager = "*"

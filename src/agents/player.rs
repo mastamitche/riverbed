@@ -36,7 +36,11 @@ impl Plugin for PlayerPlugin {
             .add_systems(
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
-            );
+            )
+            .add_systems(Update, move_player)
+            .add_systems(Update, toggle_fly)
+            .add_systems(Update, reset_heading)
+            ;
     }
 }
 

@@ -1,7 +1,7 @@
 use super::chunk_culling::chunk_culling;
 use super::shared_load_area::{setup_shared_load_area, update_shared_load_area, SharedLoadArea};
 use super::texture_array::BlockTextureArray;
-use super::texture_array::{TextureArrayPlugin, TextureMap};
+use super::texture_array::{TextureArrayPlugin};
 use crate::block::Face;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
@@ -115,14 +115,12 @@ fn setup_mesh_thread(
     mut commands: Commands,
     blocks: Res<VoxelWorld>,
     shared_load_area: Res<SharedLoadArea>,
-    texture_map: Res<TextureMap>,
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
     let chunks = Arc::clone(&blocks.chunks);
     let (mesh_sender, mesh_reciever) = unbounded();
     commands.insert_resource(MeshReciever(mesh_reciever));
     let shared_load_area = Arc::clone(&shared_load_area.0);
-    let texture_map = Arc::clone(&texture_map.0);
     thread_pool
         .spawn(async move {
             loop {
@@ -136,7 +134,7 @@ fn setup_mesh_thread(
                 let Some(chunk) = chunks.get(&chunk_pos) else {
                     continue;
                 };
-                let face_meshes = chunk.create_face_meshes(&*texture_map, lod);
+                let face_meshes = chunk.create_face_meshes(lod);
                 for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                     let face = i.into();
                     if mesh_sender

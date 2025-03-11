@@ -11,7 +11,6 @@ use bevy::{
 };
 use binary_greedy_meshing as bgm;
 
-use super::texture_array::TextureMapTrait;
 use crate::world::CHUNK_S1;
 use crate::{
     block::Face,
@@ -22,24 +21,6 @@ use crate::{
 const MASK_6: u64 = 0b111111;
 const MASK_6_u32: u32 = 0b111111;
 const MASK_XYZ: u64 = 0b111111_111111_111111;
-/// ## Compressed voxel vertex data
-/// first u32 (vertex dependant):
-///     - chunk position: 3x6 bits (33 values)
-///     - texture coords: 2x6 bits (33 values)
-///     - ambiant occlusion?: 2 bits (4 values)
-/// `0bao_vvvvvv_uuuuuu_zzzzzz_yyyyyy_xxxxxx`
-///
-/// second u32 (vertex agnostic):
-///     - normals: 3 bits (6 values) = face
-///     - color: 9 bits (3 r, 3 g, 3 b)
-///     - texture layer: 16 bits
-///     - light level: 4 bits (16 value)
-///
-/// `0bllll_iiiiiiiiiiiiiiii_ccccccccc_nnn`
-pub const ATTRIBUTE_VOXEL_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Uint32x2);
-pub const ATTRIBUTE_INSTANCE_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("InstanceData", 48757582, VertexFormat::Uint32x2);
 
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
@@ -65,7 +46,6 @@ impl Chunk {
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
     pub fn create_face_meshes(
         &self,
-        texture_map: impl TextureMapTrait,
         lod: usize,
     ) -> [Option<Mesh>; 6] {
         // Gathering binary greedy meshing input data
@@ -98,7 +78,7 @@ impl Chunk {
                 let h = MASK_6 & (quad >> 24);
                 let xyz = MASK_XYZ & quad;
                 let block = self.palette[voxel_i];
-                // let texture_index = texture_map.get_texture_index(block, face) as f32;
+                
                 let color = match (block, face) {
                     (Block::GrassBlock, Face::Up) => [0.0, 1.0, 0.0, 1.0],
                     (Block::SeaBlock, _) => [0.0, 0.0, 1.0, 1.0],
