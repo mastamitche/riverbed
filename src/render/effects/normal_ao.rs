@@ -54,10 +54,12 @@ impl Plugin for NormalAoPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.init_resource::<NormalAoPipeline>();
-            info!("Initialized normal_ao pipeline");
-        }
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
+            return;
+        };
+        render_app.init_resource::<NormalAoPipeline>();
+        info!("Initialized normal_ao pipeline");
+        
     }
 }
 
@@ -230,12 +232,10 @@ impl ViewNode for NormalAoNode {
             return Ok(());
         }
         
-        
         // Get our pipeline resource
         let normal_ao_pipeline = world.resource::<NormalAoPipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
-        
         // Get the post-process input texture view
         let source_view = view_target.main_texture_view();
         

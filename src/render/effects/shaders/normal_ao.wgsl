@@ -65,5 +65,5 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     ao = clamp(ao, 0.0, 1.0);
     
     // Apply AO to the color
-    return color;//vec4<f32>(color.rgb * ao, color.a);
+    return vec4<f32>(color.rgb * ao, color.a);
 }
