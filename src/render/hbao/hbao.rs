@@ -121,6 +121,8 @@ pub struct HBAOBindGroups {
     pub ao_gen_bind_group: bevy::render::render_resource::BindGroup,
     pub blur_bind_group: bevy::render::render_resource::BindGroup,
     pub application_bind_group: bevy::render::render_resource::BindGroup,
+
+    pub random_data: Vec<f32>,
 }
 
 #[derive(Component)]
@@ -488,7 +490,9 @@ fn prepare_pipeline_textures(
                 sample_count: 1,
                 dimension: TextureDimension::D2,
                 format: TextureFormat::R32Float,
-                usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
+                usage: TextureUsages::COPY_DST
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             },
         );
@@ -601,7 +605,7 @@ fn prepare_pipeline_bind_groups(
             &pipelines.ao_gen_bind_group_layout,
             &BindGroupEntries::sequential((
                 &hbao_resources.linear_depth_texture.default_view,
-                &hbao_resources.normal_texture.default_view,
+                prepass_textures.normal_view().unwrap(),
                 &hbao_resources.random_rotation_texture.default_view,
                 &hbao_resources.raw_ao_texture.default_view,
                 hbao_resources.ao_gen_params.as_entire_binding(),
@@ -615,7 +619,7 @@ fn prepare_pipeline_bind_groups(
             &BindGroupEntries::sequential((
                 &hbao_resources.raw_ao_texture.default_view,
                 &hbao_resources.linear_depth_texture.default_view,
-                &hbao_resources.normal_texture.default_view,
+                prepass_textures.normal_view().unwrap(),
                 &hbao_resources.blur_ao_texture.default_view,
                 hbao_resources.blur_params.as_entire_binding(),
             )),
@@ -631,7 +635,14 @@ fn prepare_pipeline_bind_groups(
                 &hbao_resources.linear_depth_texture.default_view,
             )),
         );
+        use rand::Rng;
+        let size = view_target.main_texture().size();
 
+        let mut rng = rand::rng();
+        let mut random_data = vec![0.0f32; (size.width * size.height) as usize];
+        for value in random_data.iter_mut() {
+            *value = rng.random_range(0.0..1.0);
+        }
         // Insert all bind groups as a component on the entity
         commands.entity(entity).insert(HBAOBindGroups {
             common_bind_group,
@@ -639,6 +650,8 @@ fn prepare_pipeline_bind_groups(
             ao_gen_bind_group,
             blur_bind_group,
             application_bind_group,
+
+            random_data,
         });
     }
 }
