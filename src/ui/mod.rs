@@ -6,6 +6,8 @@ use bevy::{
 };
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
+use crate::render::sky::sky::Sun;    
+
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
@@ -17,10 +19,11 @@ impl Plugin for UIPlugin {
             fov: 10.0,
             near: 0.1,
             far: 10000.0,
-            distance: 100.0,
+            distance: 5.0,
             pitch: initial_pitch,
             yaw: 0.0,
             ambient_strength: 800.0,
+            directional_strength: 800.0,
         })
         .add_systems(
             Update,
@@ -45,6 +48,7 @@ pub struct CameraSettings {
     yaw: f32,
     //lighting
     ambient_strength: f32,
+    directional_strength: f32,
 }
 
 pub fn adjust_camera_angle(
@@ -78,23 +82,34 @@ pub fn adjust_camera_angle(
 
 fn ui_system(mut contexts: EguiContexts, mut camera_settings: ResMut<CameraSettings>) {
     egui::Window::new("Camera Settings").show(contexts.ctx_mut(), |ui| {
-        ui.add(egui::Slider::new(&mut camera_settings.distance, 1.0..=3000.0).text("Height"));
+        ui.add(egui::Slider::new(&mut camera_settings.distance, 1.0..=100.0).text("Distance"));
         ui.add(egui::Slider::new(&mut camera_settings.pitch, 0.0..=90.0).text("Pitch"));
         ui.add(egui::Slider::new(&mut camera_settings.yaw, 0.0..=360.0).text("Yaw"));
         // ui.add(egui::Slider::new(&mut camera_settings.near, 0.1..=100.0).text("Near"));
         // ui.add(egui::Slider::new(&mut camera_settings.far, 100.0..=10000.0).text("Far"));
 
-        ui.add(egui::Slider::new(&mut camera_settings.fov, 0.0..=45.0).text("FOV"));
+        ui.add(egui::Slider::new(&mut camera_settings.fov, 5.0..=90.0).text("FOV"));
     });
     egui::Window::new("Lighting Settings").show(contexts.ctx_mut(), |ui| {
         ui.add(
             egui::Slider::new(&mut camera_settings.ambient_strength, 0.0..=2000.0)
                 .text("Ambient Strength"),
         );
+        ui.add(
+            egui::Slider::new(&mut camera_settings.directional_strength, 0.0..=20000.0)
+                .text("Directional Strength"),
+        );
     });
 }
-fn update_lighting(camera_settings: Res<CameraSettings>, mut ambient_light: ResMut<AmbientLight>) {
+fn update_lighting(
+    camera_settings: Res<CameraSettings>,
+    mut ambient_light: ResMut<AmbientLight>,
+    mut d_l: Query<&mut DirectionalLight, With<Sun>>,
+) {
     ambient_light.brightness = camera_settings.ambient_strength;
+    for mut directional_light in d_l.iter_mut() {
+        directional_light.illuminance = camera_settings.directional_strength;
+    }
 }
 fn update_camera_projection(
     camera_settings: Res<CameraSettings>,

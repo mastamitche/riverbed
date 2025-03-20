@@ -10,12 +10,21 @@ const C: f32 = DAY_LENGTH_MINUTES * 120. * PI;
 struct CycleTimer(Timer);
 
 #[derive(Component)]
-struct Sun;
+pub struct Sun;
 
 fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<Camera3d>>) {
     let cam = cam_query.get_single().unwrap();
     commands.entity(cam).insert(AtmosphereCamera::default());
-    commands.spawn((Sun, VolumetricLight, DirectionalLight::default()));
+    commands.spawn((
+        Sun,
+        VolumetricLight,
+        DirectionalLight {
+            color: Color::WHITE,
+            illuminance: 10000.,
+            shadows_enabled: true,
+            ..Default::default()
+        },
+    ));
 }
 
 pub struct SkyPlugin;

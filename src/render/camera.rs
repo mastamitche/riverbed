@@ -1,13 +1,12 @@
 use crate::agents::{PlayerControlled, PlayerSpawn, AABB};
 use bevy::core_pipeline::experimental::taa::TemporalAntiAliasing;
-use bevy::pbr::{ScreenSpaceAmbientOcclusion, ScreenSpaceAmbientOcclusionQualityLevel};
+use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
+use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::render::camera::ScalingMode;
 use bevy::window::CursorGrabMode;
 use bevy::{pbr::VolumetricFog, prelude::*};
 use leafwing_input_manager::prelude::*;
 use std::f32::consts::PI;
-
-use super::effects::NormalAoSettings;
 
 const CAMERA_PAN_RATE: f32 = 0.06;
 
@@ -49,7 +48,7 @@ pub fn cam_setup(
     let initial_angle_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
     let initial_angle: f32 = initial_angle_degrees.to_radians();
     // Calculate camera position based on the angle
-    let camera_height = 100.0; // Adjust this value to change the camera's height
+    let camera_height = 5.0; // Reduced from 100.0 to 5.0 to match UI settings
     let camera_offset_z = camera_height * initial_angle.sin();
 
     let cam = commands
@@ -62,18 +61,17 @@ pub fn cam_setup(
             )
             .looking_at(Vec3::new(aabb.0.x / 2., 0.0, aabb.0.z / 2.), Vec3::Y),
             Projection::Perspective(PerspectiveProjection {
-                far: 10000.,
-                fov: PI / 3.,
+                near: 0.1,
+                far: 1000.,
+                fov: (60.0_f32).to_radians(), // Changed from PI/3 to 60 degrees for a more standard FOV
                 ..Default::default()
             }),
-            Msaa::Off
+            DepthPrepass,
+            NormalPrepass,
+            Msaa::Off,
         ))
-        .insert(NormalAoSettings::default())
+        // .insert(ScreenSpaceAmbientOcclusion::default())
         .insert(TemporalAntiAliasing::default())
-        .insert(ScreenSpaceAmbientOcclusion{
-            quality_level: ScreenSpaceAmbientOcclusionQualityLevel::Low,
-            constant_object_thickness: 10.
-        })
         .insert(InputManagerBundle::<CameraMovement> {
             input_map,
             ..default()

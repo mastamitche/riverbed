@@ -10,14 +10,18 @@ mod world;
 include!(concat!(env!("OUT_DIR"), "/blocks.rs"));
 use agents::{MovementPlugin, PlayerPlugin};
 use bevy::{
-    core_pipeline::experimental::taa::TemporalAntiAliasPlugin, image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor}, prelude::*, render::{
+    core_pipeline::experimental::taa::TemporalAntiAliasPlugin,
+    image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
+    prelude::*,
+    render::{
         settings::{Backends, RenderCreation, WgpuSettings},
         RenderPlugin,
-    }, text::FontSmoothing
+    },
+    text::FontSmoothing,
 };
 use bevy_dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin};
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
-use render::{Render};
+use render::Render;
 use sounds::SoundPlugin;
 use ui::UIPlugin;
 use world::GenPlugin;
