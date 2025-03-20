@@ -158,15 +158,15 @@ pub fn lighting_ui_system(
     egui::Window::new("HBAO Settings").show(contexts.ctx_mut(), |ui| {
         ui.collapsing("AO Generation", |ui| {
             ui.add(
-                egui::Slider::new(&mut lighting_settings.ao_gen_params.radius, 0.25..=1.0)
+                egui::Slider::new(&mut lighting_settings.ao_gen_params.radius, 0.2..=1.0)
                     .text("Radius"),
             );
             ui.add(
-                egui::Slider::new(&mut lighting_settings.ao_gen_params.bias, 0.01..=0.05)
+                egui::Slider::new(&mut lighting_settings.ao_gen_params.bias, 0.0001..=0.05)
                     .text("Bias"),
             );
             ui.add(
-                egui::Slider::new(&mut lighting_settings.ao_gen_params.strength, 1.0..=2.0)
+                egui::Slider::new(&mut lighting_settings.ao_gen_params.strength, 1.0..=8.0)
                     .text("Strength"),
             );
             ui.add(
@@ -180,7 +180,7 @@ pub fn lighting_ui_system(
             ui.add(
                 egui::Slider::new(
                     &mut lighting_settings.ao_gen_params.max_radius_pixels,
-                    32.0..=128.0,
+                    5.0..=128.0,
                 )
                 .text("Max Radius Pixels"),
             );

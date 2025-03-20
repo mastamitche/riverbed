@@ -217,7 +217,9 @@ impl Plugin for HBAOPlugin {
                 bevy::render::Render,
                 (
                     prepare_pipeline_textures.in_set(RenderSet::PrepareResources),
-                    prepare_pipeline_bind_groups.in_set(RenderSet::PrepareBindGroups),
+                    (prepare_pipeline_bind_groups, sync_params)
+                        .chain()
+                        .in_set(RenderSet::PrepareBindGroups),
                 ),
             )
             .add_render_graph_node::<ViewNodeRunner<HBAOLinearDepthPrepassNode>>(
@@ -559,6 +561,43 @@ fn prepare_pipeline_textures(
         });
     }
 }
+fn sync_params(
+    lighting_settings: Res<LightingSettings>,
+    render_device: Res<RenderDevice>,
+    mut views: Query<(Entity, &ExtractedCamera, &mut HBAOSharedPipelineResources)>,
+) {
+    for (entity, _, mut resources) in views.iter_mut() {
+        // Create the buffer for AOGenParams
+        let ao_gen_params_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("ao_gen_params_buffer"),
+            contents: bytemuck::cast_slice(&[lighting_settings.ao_gen_params]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        // Create the buffer for BlurParams
+        let blur_params_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("blur_params_buffer"),
+            contents: bytemuck::cast_slice(&[lighting_settings.blur_params]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let params_clone = lighting_settings.ao_application_params;
+        let bytes = bytemuck::bytes_of(&params_clone).to_vec();
+
+        // Create the buffer for AOApplicationParams
+        let ao_application_params_buffer =
+            render_device.create_buffer_with_data(&BufferInitDescriptor {
+                label: Some("ao_application_params_buffer"),
+                contents: &bytes,
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+
+        // Update the specific fields in the existing HBAOSharedPipelineResources
+        resources.ao_gen_params = ao_gen_params_buffer;
+        resources.blur_params = blur_params_buffer;
+        resources.ao_application_params = ao_application_params_buffer;
+    }
+}
 fn prepare_pipeline_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
@@ -568,7 +607,7 @@ fn prepare_pipeline_bind_groups(
         Entity,
         &HBAOSharedPipelineResources,
         &ViewTarget,
-        &ViewPrepassTextures, // Add this
+        &ViewPrepassTextures,
     )>,
 ) {
     let Some(view_uniforms) = view_uniforms.uniforms.binding() else {
@@ -643,6 +682,7 @@ fn prepare_pipeline_bind_groups(
         for value in random_data.iter_mut() {
             *value = rng.random_range(0.0..1.0);
         }
+
         // Insert all bind groups as a component on the entity
         commands.entity(entity).insert(HBAOBindGroups {
             common_bind_group,

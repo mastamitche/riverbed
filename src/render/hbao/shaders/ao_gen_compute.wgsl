@@ -57,9 +57,7 @@ fn sample_random_vector(coords: vec2<i32>) -> vec2<f32> {
     
     return random * 2.0 - 1.0;
 }
-
-fn calculate_ao(origin_pos: vec3<f32>, normal: vec3<f32>, random_vec: vec2<f32>, uv: vec2<f32>, texel_size: vec2<f32>) -> f32 {
-    // Calculate tangent and bitangent for sampling hemisphere
+fn calculate_ao_voxel_balanced(position: vec3<f32>, normal: vec3<f32>, random_vec: vec2<f32>, uv: vec2<f32>, texel_size: vec2<f32>, depth: f32) -> f32 {
     var tangent = normalize(vec3<f32>(random_vec.x, random_vec.y, 0.0));
     if (abs(dot(tangent, normal)) > 0.99) {
         tangent = normalize(vec3<f32>(0.0, 1.0, 0.0));
@@ -67,14 +65,12 @@ fn calculate_ao(origin_pos: vec3<f32>, normal: vec3<f32>, random_vec: vec2<f32>,
     let bitangent = normalize(cross(normal, tangent));
     tangent = cross(bitangent, normal);
     
-    // Matrix for rotating samples
-    let tbn = mat3x3<f32>(tangent, bitangent, normal);
-    
     var total_ao = 0.0;
-    let step_angle = 2.0 * 3.14159265359 / f32(ao_params.num_directions);
+    let num_directions = max(ao_params.num_directions, 16u);
+    let step_angle = 2.0 * 3.14159265359 / f32(num_directions);
     
-    // Sample in multiple directions
-    for (var i = 0u; i < ao_params.num_directions; i = i + 1u) {
+    // Ensure we sample both horizontal and vertical directions evenly
+    for (var i = 0u; i < num_directions; i = i + 1u) {
         let angle = f32(i) * step_angle;
         let direction = vec2<f32>(cos(angle), sin(angle));
         
@@ -84,57 +80,62 @@ fn calculate_ao(origin_pos: vec3<f32>, normal: vec3<f32>, random_vec: vec2<f32>,
             direction.x * random_vec.y + direction.y * random_vec.x
         );
         
-        // Calculate horizon occlusion
-        let max_angle = -1.0;
-        let step_size = ao_params.radius / f32(ao_params.num_steps);
+        var occlusion_sum = 0.0;
+        var prev_depth = depth;
         
-        // Sample along the direction
-        for (var j = 1u; j <= ao_params.num_steps; j = j + 1u) {
+        // Use a smaller radius but more steps for fine detail
+        let sample_radius = ao_params.radius * 0.2;
+        let num_steps = min(ao_params.num_steps * 3u, 24u);
+        let step_size = sample_radius / f32(num_steps);
+        
+        // Explicitly boost vertical sensitivity
+        let vertical_boost = 1.0 + 2.0 * abs(direction.y);
+        
+        for (var j = 1u; j <= num_steps; j = j + 1u) {
             let sample_dist = step_size * f32(j);
             
-            // Calculate sample point in screen space
+            // Use pixel-based sampling for more precision
             let sample_uv = uv + rotated_dir * sample_dist * texel_size * ao_params.max_radius_pixels;
             
-            // Skip samples outside the screen
             if (sample_uv.x <= 0.0 || sample_uv.x >= 1.0 || sample_uv.y <= 0.0 || sample_uv.y >= 1.0) {
                 continue;
             }
             
-            // textureGather returns 4 samples in counterclockwise order starting from the bottom-left
-            let depths = textureGather(0, linear_depth_texture, non_filtering_sampler, sample_uv);
-            // Use bilinear interpolation manually if needed, or just pick one sample
-            // For simplicity, let's use the bottom-left sample (depths.w)
-            let sample_depth = depths.w;
+            // Get precise sample coordinates
+            let dims = textureDimensions(linear_depth_texture);
+            let sample_coords = vec2<i32>(sample_uv * vec2<f32>(dims));
+            
+            // Sample depth directly for better precision
+            let sample_depth = textureLoad(linear_depth_texture, sample_coords, 0).r;
             let sample_pos = reconstruct_position(sample_uv, sample_depth);
-
-            // Calculate vector from origin to sample
-            let v = sample_pos - origin_pos;
-            let dist = length(v);
             
-            // Skip if sample is too far
-            if (dist > ao_params.radius) {
-                continue;
+            // Calculate depth difference with vertical boost
+            let depth_diff = abs(sample_depth - prev_depth) * 100.0 * vertical_boost;
+            
+            // Calculate world-space distance
+            let world_dist = distance(sample_pos, position);
+            
+            // Detect edges - more sensitive for vertical directions
+            if (depth_diff > 0.001) {
+                // The smaller the distance but larger the depth change, the stronger the occlusion
+                let edge_strength = min(depth_diff / max(world_dist * 10.0, 0.001), 1.0);
+                occlusion_sum += edge_strength;
             }
             
-            // Calculate angle between normal and sample
-            let normalized_v = v / dist;
-            let angle = asin(clamp(normalized_v.z, -1.0, 1.0));
-            
-            // Apply falloff based on distance
-            let falloff = 1.0 - pow(dist / ao_params.radius, ao_params.falloff_scale);
-            
-            // Accumulate occlusion with bias
-            if (angle > max_angle) {
-                let horizon_angle = angle;
-                let occlusion = clamp(sin(horizon_angle) - sin(max_angle + ao_params.bias), 0.0, 1.0);
-                total_ao += occlusion * falloff;
-            }
+            prev_depth = sample_depth;
         }
+        
+        // Add weighted occlusion for this direction
+        total_ao += min(occlusion_sum, 1.0);
     }
     
     // Normalize and apply strength
-    total_ao = 1.0 - (total_ao / f32(ao_params.num_directions) * ao_params.strength);
-    return clamp(total_ao, 0.0, 1.0);
+    total_ao = 1.0 - (total_ao / f32(num_directions) * ao_params.strength * 2.0);
+    
+    // Apply moderate contrast - avoid extreme values that might cause only dots
+    total_ao = pow(clamp(total_ao, 0.0, 1.0), 0.7);
+    
+    return total_ao;
 }
 
 @compute @workgroup_size(8, 8, 1)
@@ -167,7 +168,7 @@ fn ao_gen_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let random_vec = sample_random_vector(coords);
     
     // Calculate AO
-    let ao_value = calculate_ao(position, normal, random_vec, uv, texel_size);
+    let ao_value = calculate_ao_voxel_balanced(position, normal, random_vec, uv, texel_size, depth);
     
     // Store AO value
     textureStore(output_ao, coords, vec4<f32>(ao_value, 0.0, 0.0, 0.0));
