@@ -8,6 +8,7 @@ use bevy::{
     prelude::*,
     render::{
         camera::ExtractedCamera,
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_graph::{RenderGraphApp, RenderLabel, ViewNodeRunner},
         render_resource::{
             binding_types::{
@@ -29,13 +30,15 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 
+use crate::ui::LightingSettings;
+
 use super::{
     ao_gen_prepass_node::HBAOAoGenPrepassNode, blur_prepass_node::HBAOBlurPrepassNode,
     linear_depth_prepass_node::HBAOLinearDepthPrepassNode,
     postprocessing_node::HBAOApplicationNode,
 };
 
-#[derive(Resource, ShaderType, Clone, Copy, Pod, Zeroable)]
+#[derive(Resource, ShaderType, Clone, Copy, Pod, Zeroable, ExtractResource, Reflect)]
 #[repr(C)]
 pub struct AOGenParams {
     pub radius: f32,
@@ -50,11 +53,11 @@ pub struct AOGenParams {
 impl Default for AOGenParams {
     fn default() -> Self {
         Self {
-            radius: 0.1,             // Typical range: 0.25 to 1.0
-            bias: 0.005,             // Typical range: 0.01 to 0.05
+            radius: 0.5,             // Typical range: 0.25 to 1.0
+            bias: 0.025,             // Typical range: 0.01 to 0.05
             strength: 1.5,           // Typical range: 1.0 to 2.0
             num_directions: 8,       // Common values: 4, 8, or 16
-            num_steps: 8,            // Typical range: 3 to 6
+            num_steps: 4,            // Typical range: 3 to 6
             max_radius_pixels: 32.0, // Typical range: 32.0 to 128.0
             falloff_scale: 0.5,      // Typical range: 0.0 to 1.0
             denoise_blur: 1.0,       // Typical range: 0.0 to 2.0
@@ -62,7 +65,7 @@ impl Default for AOGenParams {
     }
 }
 
-#[derive(Resource, ShaderType, Clone, Copy, Pod, Zeroable)]
+#[derive(Resource, ShaderType, Clone, Copy, Pod, Zeroable, ExtractResource, Reflect)]
 #[repr(C)]
 pub struct BlurParams {
     pub blur_radius: f32,
@@ -81,7 +84,7 @@ impl Default for BlurParams {
     }
 }
 
-#[derive(Resource, ShaderType, Clone, Copy, Pod, Zeroable)]
+#[derive(Resource, ShaderType, Clone, Copy, Pod, Zeroable, ExtractResource, Reflect)]
 #[repr(C)]
 pub struct AOApplicationParams {
     pub strength: f32,
@@ -110,6 +113,7 @@ impl Default for AOApplicationParams {
         }
     }
 }
+
 #[derive(Component)]
 pub struct HBAOBindGroups {
     pub common_bind_group: bevy::render::render_resource::BindGroup,
@@ -198,6 +202,7 @@ impl Plugin for HBAOPlugin {
             "shaders/apply_ao_frag.wgsl",
             Shader::from_wgsl
         );
+        app.add_plugins(ExtractResourcePlugin::<LightingSettings>::default());
     }
     fn finish(&self, app: &mut App) {
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -206,9 +211,6 @@ impl Plugin for HBAOPlugin {
         };
         render_app
             .init_resource::<HBAOPipelines>()
-            .init_resource::<AOApplicationParams>()
-            .init_resource::<BlurParams>()
-            .init_resource::<AOGenParams>()
             .add_systems(
                 bevy::render::Render,
                 (
@@ -436,9 +438,7 @@ impl FromWorld for HBAOPipelines {
 fn prepare_pipeline_textures(
     mut commands: Commands,
     mut texture_cache: ResMut<TextureCache>,
-    ao_gen_params: Res<AOGenParams>,
-    blur_params: Res<BlurParams>,
-    ao_application_params: Res<AOApplicationParams>,
+    lighting_settings: Res<LightingSettings>,
     render_device: Res<RenderDevice>,
     views: Query<(Entity, &ExtractedCamera), Without<HBAOSharedPipelineResources>>,
 ) {
@@ -521,17 +521,17 @@ fn prepare_pipeline_textures(
         // Create the buffer for AOGenParams
         let ao_gen_params_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("ao_gen_params_buffer"),
-            contents: bytemuck::cast_slice(&[*ao_gen_params.as_ref()]),
+            contents: bytemuck::cast_slice(&[lighting_settings.ao_gen_params]),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
         // Create the buffer for BlurParams
         let blur_params_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("blur_params_buffer"),
-            contents: bytemuck::cast_slice(&[*blur_params.as_ref()]),
+            contents: bytemuck::cast_slice(&[lighting_settings.blur_params]),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
-        let params_clone = *ao_application_params.as_ref();
+        let params_clone = lighting_settings.ao_application_params;
         let bytes = bytemuck::bytes_of(&params_clone).to_vec();
 
         // Create the buffer for AOApplicationParams

@@ -1,19 +1,7 @@
-use bevy::{
-    app::Plugin,
-    ecs::{component::Component, system::Resource},
-    render::{
-        extract_component::ExtractComponent,
-        render_resource::{
-            BindGroupLayout, CachedComputePipelineId, CachedRenderPipelineId, Sampler,
-            TextureFormat,
-        },
-        texture::CachedTexture,
-    },
-    state::commands,
-};
+use bevy::app::Plugin;
 mod ao_gen_prepass_node;
 mod blur_prepass_node;
-mod hbao;
+pub mod hbao;
 mod linear_depth_prepass_node;
 mod postprocessing_node;
 

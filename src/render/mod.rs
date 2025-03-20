@@ -1,7 +1,7 @@
 pub mod camera;
 mod chunk_culling;
 mod draw_chunks;
-mod hbao;
+pub mod hbao;
 mod mesh_chunks;
 mod mesh_utils;
 mod shared_load_area;
