@@ -28,15 +28,6 @@ pub fn pad_linearize(x: usize, y: usize, z: usize) -> usize {
     // Remove the +1 offsets to keep indices within bounds
     z + x * CHUNKP_S1 + y * CHUNKP_S2
 }
-pub fn pack_voxels(voxels: [bool; 8]) -> u8 {
-    let mut packed = 0u8;
-    for i in 0..8 {
-        if voxels[i] {
-            packed |= 1 << i;
-        }
-    }
-    packed
-}
 
 impl Chunk {
     pub fn get(&self, (x, y, z): ChunkedPos) -> &Block {
