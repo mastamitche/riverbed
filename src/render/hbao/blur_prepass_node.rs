@@ -4,7 +4,7 @@ use bevy::{
     render::{
         camera::ExtractedCamera,
         render_graph::{NodeRunError, RenderGraphContext, ViewNode},
-        render_resource::{ComputePassDescriptor, PipelineCache},
+        render_resource::PipelineCache,
         renderer::RenderContext,
         view::ViewUniformOffset,
     },
@@ -25,12 +25,12 @@ impl ViewNode for HBAOBlurPrepassNode {
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (camera, bind_groups, view_uniform_offset): QueryItem<Self::ViewQuery>,
+        (camera, _, _): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipelines = world.resource::<HBAOPipelines>();
-        let (Some(camera_size), Some(blur_pipeline)) = (
+        let (Some(_), Some(_)) = (
             camera.physical_viewport_size,
             pipeline_cache.get_compute_pipeline(pipelines.blur_pipeline),
         ) else {

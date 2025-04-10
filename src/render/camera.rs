@@ -1,13 +1,10 @@
 use crate::agents::{PlayerControlled, PlayerSpawn, AABB};
 use bevy::core_pipeline::experimental::taa::TemporalAntiAliasing;
-use bevy::core_pipeline::prepass::{DepthPrepass, NormalPrepass};
 use bevy::pbr::ScreenSpaceAmbientOcclusion;
-use bevy::render::camera::ScalingMode;
-use bevy::window::CursorGrabMode;
-use bevy::{pbr::VolumetricFog, prelude::*};
+use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
-use std::f32::consts::PI;
 
+#[allow(dead_code)]
 const CAMERA_PAN_RATE: f32 = 0.06;
 
 pub struct Camera3dPlugin;
@@ -66,11 +63,9 @@ pub fn cam_setup(
                 fov: (60.0_f32).to_radians(), // Changed from PI/3 to 60 degrees for a more standard FOV
                 ..Default::default()
             }),
-            DepthPrepass,
-            NormalPrepass,
             Msaa::Off,
         ))
-        // .insert(ScreenSpaceAmbientOcclusion::default())
+        //.insert(ScreenSpaceAmbientOcclusion::default())
         .insert(TemporalAntiAliasing::default())
         .insert(InputManagerBundle::<CameraMovement> {
             input_map,

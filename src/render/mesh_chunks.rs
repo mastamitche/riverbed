@@ -3,11 +3,7 @@ use std::collections::BTreeSet;
 use bevy::{
     log::info_span,
     prelude::Mesh,
-    render::{
-        mesh::{Indices, MeshVertexAttribute},
-        render_asset::RenderAssetUsages,
-        render_resource::{PrimitiveTopology, VertexFormat},
-    },
+    render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
 };
 use binary_greedy_meshing as bgm;
 
@@ -19,7 +15,7 @@ use crate::{
 };
 
 const MASK_6: u64 = 0b111111;
-const MASK_6_u32: u32 = 0b111111;
+const MASK_6_U32: u32 = 0b111111;
 const MASK_XYZ: u64 = 0b111111_111111_111111;
 
 impl Chunk {
@@ -44,10 +40,7 @@ impl Chunk {
 
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(
-        &self,
-        lod: usize,
-    ) -> [Option<Mesh>; 6] {
+    pub fn create_face_meshes(&self, lod: usize) -> [Option<Mesh>; 6] {
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         let voxels = self.voxel_data_lod(lod);
@@ -78,7 +71,7 @@ impl Chunk {
                 let h = MASK_6 & (quad >> 24);
                 let xyz = MASK_XYZ & quad;
                 let block = self.palette[voxel_i];
-                
+
                 let color = match (block, face) {
                     (Block::GrassBlock, Face::Up) => [0.0, 1.0, 0.0, 1.0],
                     (Block::SeaBlock, _) => [0.0, 0.0, 1.0, 1.0],
@@ -88,15 +81,15 @@ impl Chunk {
                 let packed_vertices =
                     face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
                 for packed_vertex in packed_vertices.iter() {
-                    let x = (packed_vertex & MASK_6_u32) as f32;
-                    let y = ((packed_vertex >> 6) & MASK_6_u32) as f32;
-                    let z = ((packed_vertex >> 12) & MASK_6_u32) as f32;
-                    let u = ((packed_vertex >> 18) & MASK_6_u32) as f32;
-                    let v = ((packed_vertex >> 24) & MASK_6_u32) as f32;
+                    let x = (packed_vertex & MASK_6_U32) as f32;
+                    let y = ((packed_vertex >> 6) & MASK_6_U32) as f32;
+                    let z = ((packed_vertex >> 12) & MASK_6_U32) as f32;
+                    let u = ((packed_vertex >> 18) & MASK_6_U32) as f32;
+                    let v = ((packed_vertex >> 24) & MASK_6_U32) as f32;
 
                     positions.push([x, y, z]);
                     normals.push(face_normal);
-                    uvs.push([u / 63.0, v / 63.0]); // Normalize UV coordinates
+                    uvs.push([u / 64.0, v / 64.0]); // Normalize UV coordinates
                     colors.push(color);
                 }
             }

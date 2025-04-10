@@ -6,7 +6,7 @@ mod mesh_chunks;
 mod mesh_utils;
 mod shared_load_area;
 pub mod sky;
-mod texture_array;
+pub mod texture_array;
 use bevy::prelude::Plugin;
 
 pub struct Render;

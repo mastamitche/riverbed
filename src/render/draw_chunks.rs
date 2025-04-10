@@ -1,12 +1,14 @@
 use super::chunk_culling::chunk_culling;
 use super::shared_load_area::{setup_shared_load_area, update_shared_load_area, SharedLoadArea};
-use super::texture_array::BlockTextureArray;
-use super::texture_array::{TextureArrayPlugin};
+use super::texture_array::{
+    ChunkDataModel, TextureArrayPlugin, VoxelAOMaterial, VoxelChunkMaterial,
+};
 use crate::block::Face;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
 use crate::world::{ChunkPos, VoxelWorld, CHUNK_S1, Y_CHUNKS};
 use bevy::color::palettes::css;
+use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 use bevy::render::view::NoFrustumCulling;
@@ -17,19 +19,21 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::yield_now;
 use strum::IntoEnumIterator;
+#[allow(dead_code)]
 const GRID_GIZMO_LEN: i32 = 4;
 
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
 
 fn choose_lod_level(chunk_dist: u32) -> usize {
-    if chunk_dist < 8 {
-        return 1;
-    }
-    if chunk_dist < 12 {
-        return 2;
-    }
-    return 3;
+    1
+    // if chunk_dist < 8 {
+    //     return 1;
+    // }
+    // if chunk_dist < 12 {
+    //     return 2;
+    // }
+    // return 3;
 }
 
 fn mark_lod_remesh(
@@ -153,11 +157,17 @@ pub fn pull_meshes(
     mut commands: Commands,
     mesh_reciever: Res<MeshReciever>,
     mut chunk_ents: ResMut<ChunkEntities>,
-    mut mesh_query: Query<(&mut Mesh3d, &mut LOD)>,
+    mut mesh_query: Query<(
+        &mut Mesh3d,
+        &mut LOD,
+        &mut MeshMaterial3d<ExtendedMaterial<StandardMaterial, VoxelChunkMaterial>>,
+    )>,
     mut meshes: ResMut<Assets<Mesh>>,
-    block_tex_array: Res<BlockTextureArray>,
+    voxel_material: Res<VoxelAOMaterial>,
     load_area: Res<PlayerArea>,
     blocks: Res<VoxelWorld>,
+    mut images: ResMut<Assets<Image>>,
+    mut mesh_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, VoxelChunkMaterial>>>,
 ) {
     let received_meshes: Vec<_> = mesh_reciever
         .0
@@ -169,18 +179,78 @@ pub fn pull_meshes(
         .rev()
         .unique_by(|(_, pos, face, _)| (*pos, *face))
     {
+        let mut ao_texture_handle = None;
+        if let Some(mut chunk) = blocks.chunks.get_mut(&chunk_pos) {
+            let mut chunk_material = mesh_materials
+                .get(voxel_material.0.id())
+                .cloned()
+                .unwrap_or_else(|| ExtendedMaterial {
+                    base: StandardMaterial {
+                        perceptual_roughness: 1.0,
+                        reflectance: 0.1,
+                        alpha_mode: AlphaMode::AlphaToCoverage,
+                        ..Default::default()
+                    },
+                    extension: VoxelChunkMaterial {
+                        chunk_data: ChunkDataModel {
+                            chunk_position: IVec3::new(chunk_pos.x, chunk_pos.y, chunk_pos.z)
+                                * CHUNK_S1 as i32,
+                        },
+                        voxel_data: Handle::default(),
+                    },
+                });
+
+            // Update the AO texture
+            chunk.create_ao_textures_for_meshes(
+                &mut images,
+                chunk_pos,
+                &mut mesh_materials,
+                &voxel_material.0,
+            );
+
+            // Get the AO texture handle
+            if let Some(texture_handle) = &chunk.ao_texture_handle {
+                ao_texture_handle = Some(texture_handle.clone());
+            }
+        }
+
         let Some(mesh) = mesh_opt else {
             if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
                 commands.entity(ent).despawn();
             }
             continue;
         };
+
+        // Create a unique material for this chunk with its AO texture
+        let chunk_material_handle = if let Some(texture_handle) = ao_texture_handle {
+            let material = mesh_materials.add(ExtendedMaterial {
+                base: StandardMaterial {
+                    perceptual_roughness: 1.0,
+                    reflectance: 0.1,
+                    alpha_mode: AlphaMode::AlphaToCoverage,
+                    ..Default::default()
+                },
+                extension: VoxelChunkMaterial {
+                    chunk_data: ChunkDataModel {
+                        chunk_position: IVec3::new(chunk_pos.x, chunk_pos.y, chunk_pos.z)
+                            * CHUNK_S1 as i32,
+                    },
+                    voxel_data: texture_handle,
+                },
+            });
+            material
+        } else {
+            voxel_material.0.clone_weak()
+        };
+
         //println!("Mesh available");
         let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
         if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
-            if let Ok((mut handle, mut old_lod)) = mesh_query.get_mut(*ent) {
+            if let Ok((mut handle, mut old_lod, mut material)) = mesh_query.get_mut(*ent) {
                 handle.0 = meshes.add(mesh);
                 *old_lod = lod;
+                // Update the material to use the new AO texture
+                material.0 = chunk_material_handle;
             } else {
                 // the entity is not instanciated yet, we put it back
                 println!("entity wasn't ready to recieve updated mesh");
@@ -189,7 +259,7 @@ pub fn pull_meshes(
             let ent = commands
                 .spawn((
                     Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(block_tex_array.0.clone_weak()),
+                    MeshMaterial3d(chunk_material_handle),
                     Transform::from_translation(
                         Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32)
                             * CHUNK_S1 as f32,

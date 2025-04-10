@@ -143,6 +143,7 @@ fn grab_cursor(mut windows: Query<&mut Window>) {
     window.cursor_options.grab_mode = CursorGrabMode::Confined;
 }
 
+#[allow(dead_code)]
 fn free_cursor(mut windows: Query<&mut Window>) {
     let Ok(mut window) = windows.get_single_mut() else {
         return;

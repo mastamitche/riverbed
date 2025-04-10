@@ -1,10 +1,7 @@
-use crate::world::{
-    MAX_GEN_HEIGHT, CHUNK_S1,
-    unchunked, VoxelWorld, ColPos
-};
-use crate::{Block, gen::Soils};
-use riverbed_closest::{points, ranges, ClosestTrait};
+use crate::world::{unchunked, ColPos, VoxelWorld, CHUNK_S1, MAX_GEN_HEIGHT};
+use crate::{gen::Soils, Block};
 use itertools::iproduct;
+use riverbed_closest::{points, ranges, ClosestTrait};
 use std::{collections::HashMap, path::Path};
 
 pub struct DebugGen {
@@ -18,12 +15,6 @@ impl Clone for DebugGen {
         DebugGen::new(self.seed, self.config.clone())
     }
 }
-
-fn values(x: i32, z: i32) -> (f32, f32, f32) {
-    let y = ((x as f32/50.).sin()*0.5+0.5+(z as f32/50.).cos()*0.5+0.5)/2.;
-    (0.5, 0.5, 0.5)
-}
-
 impl DebugGen {
     pub fn new(seed: u32, config: std::collections::HashMap<String, f32>) -> Self
     where
@@ -39,7 +30,7 @@ impl DebugGen {
     pub fn gen(&self, world: &VoxelWorld, col: ColPos) {
         for (dx, dz) in iproduct!(0..CHUNK_S1, 0..CHUNK_S1) {
             let (x, z) = (unchunked(col.x, dx), unchunked(col.z, dz));
-            let (y, t, h) = values(x, z);
+            let (y, t, h) = (0.5, 0.5, 0.5);
             let y = (y * MAX_GEN_HEIGHT as f32) as i32;
             assert!(y >= 0);
             let block = *self.soils.closest([t as f32, h as f32]).0;

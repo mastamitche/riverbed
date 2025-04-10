@@ -37,7 +37,7 @@ impl DerefMut for TrackedChunk {
         &mut self.chunk
     }
 }
-
+#[allow(dead_code)]
 pub struct BlockRayCastHit {
     pub pos: BlockPos,
     pub normal: Vec3,
@@ -53,7 +53,7 @@ impl PartialEq for BlockRayCastHit {
 pub struct VoxelWorld {
     pub chunks: Arc<DashMap<ChunkPos, TrackedChunk>>,
 }
-
+#[allow(dead_code)]
 impl VoxelWorld {
     pub fn new() -> Self {
         VoxelWorld {
@@ -69,7 +69,7 @@ impl VoxelWorld {
         let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(pos);
         self.chunks
             .entry(chunk_pos)
-            .or_insert_with(|| TrackedChunk::new())
+            .or_insert_with(TrackedChunk::new)
             .set(chunked_pos, block);
         self.mark_change(chunk_pos, chunked_pos);
     }
@@ -81,7 +81,7 @@ impl VoxelWorld {
         let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(pos);
         self.chunks
             .entry(chunk_pos)
-            .or_insert_with(|| TrackedChunk::new())
+            .or_insert_with(TrackedChunk::new)
             .set(chunked_pos, block);
         self.mark_change(chunk_pos, chunked_pos);
         true
@@ -107,7 +107,7 @@ impl VoxelWorld {
             let h = height.min(dy);
             self.chunks
                 .entry(chunk_pos)
-                .or_insert_with(|| TrackedChunk::new())
+                .or_insert_with(TrackedChunk::new)
                 .set_yrange((x, dy, z), h, block);
             height -= h;
             cy -= 1;
@@ -120,7 +120,7 @@ impl VoxelWorld {
         if self
             .chunks
             .entry(chunk_pos)
-            .or_insert_with(|| TrackedChunk::new())
+            .or_insert_with(TrackedChunk::new)
             .set_if_empty(chunked_pos, block)
         {
             self.mark_change(chunk_pos, chunked_pos);
@@ -131,7 +131,7 @@ impl VoxelWorld {
         let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(pos);
         match self.chunks.get(&chunk_pos) {
             None => Block::Air,
-            Some(chunk) => chunk.get(chunked_pos).clone(),
+            Some(chunk) => *chunk.get(chunked_pos),
         }
     }
 
@@ -155,7 +155,7 @@ impl VoxelWorld {
             if let Some(chunk) = self.chunks.get(&chunk_pos) {
                 let (block, block_y) = chunk.top(pos2d);
                 if *block != Block::Air {
-                    return (block.clone(), y * CHUNK_S1 as i32 + block_y as i32);
+                    return (*block, y * CHUNK_S1 as i32 + block_y as i32);
                 }
             }
         }
@@ -309,4 +309,3 @@ impl VoxelWorld {
         }
     }
 }
-
