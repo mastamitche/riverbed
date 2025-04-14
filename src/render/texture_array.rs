@@ -1,6 +1,7 @@
 use super::mesh_chunks::ATTRIBUTE_VOXEL_DATA;
 use crate::{
     block::{Face, FaceSpecifier},
+    world::CHUNK_S1,
     Block,
 };
 use bevy::{
@@ -54,8 +55,21 @@ impl TextureMapTrait for &DashMap<(Block, FaceSpecifier), usize> {
 
 fn build_tex_array(
     mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>>,
 ) {
+    let size = 16_u32;
+    let image_handle = images.add(Image::new_fill(
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: size,
+        },
+        TextureDimension::D3,
+        &[0, 0, 0, 0],
+        TextureFormat::R32Uint,
+        RenderAssetUsages::RENDER_WORLD,
+    ));
     let handle = materials.add(ExtendedMaterial {
         base: StandardMaterial {
             perceptual_roughness: 1.,
@@ -63,7 +77,9 @@ fn build_tex_array(
             alpha_mode: AlphaMode::AlphaToCoverage,
             ..Default::default()
         },
-        extension: ArrayTextureMaterial {},
+        extension: ArrayTextureMaterial {
+            ao_data: image_handle,
+        },
     });
     commands.insert_resource(BlockTextureArray(handle));
 }
@@ -72,7 +88,11 @@ fn build_tex_array(
 pub struct BlockTextureArray(pub Handle<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>);
 
 #[derive(Asset, AsBindGroup, Debug, Clone, TypePath)]
-pub struct ArrayTextureMaterial {}
+pub struct ArrayTextureMaterial {
+    #[texture(100, dimension = "3d", sample_type = "u_int")]
+    #[sampler(101, sampler_type = "non_filtering")] // Note: filtering = false
+    pub ao_data: Handle<Image>,
+}
 
 impl MaterialExtension for ArrayTextureMaterial {
     fn vertex_shader() -> ShaderRef {

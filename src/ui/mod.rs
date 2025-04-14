@@ -14,7 +14,7 @@ impl Plugin for UIPlugin {
         let initial_pitch_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
         let initial_pitch: f32 = initial_pitch_degrees.to_radians();
         app.insert_resource(CameraSettings {
-            projection_type: ProjectionType::Orthographic,
+            projection_type: ProjectionType::Perspective,
             fov: 60.0,
             scale: 5.0,
             near: 0.1,

@@ -1,12 +1,13 @@
 use super::chunk_culling::chunk_culling;
 use super::shared_load_area::{setup_shared_load_area, update_shared_load_area, SharedLoadArea};
-use super::texture_array::BlockTextureArray;
+use super::texture_array::{ArrayTextureMaterial, BlockTextureArray};
 use super::texture_array::{TextureArrayPlugin, TextureMap};
 use crate::block::Face;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
 use crate::world::{ChunkPos, VoxelWorld, CHUNK_S1, Y_CHUNKS};
 use bevy::color::palettes::css;
+use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 use bevy::render::view::NoFrustumCulling;
@@ -109,7 +110,7 @@ fn chunk_aabb_gizmos(mut gizmos: Gizmos, load_area: Res<PlayerArea>) {
 }
 
 #[derive(Resource)]
-pub struct MeshReciever(Receiver<(Option<Mesh>, ChunkPos, Face, LOD)>);
+pub struct MeshReciever(Receiver<(Option<Mesh>, ChunkPos, Image, Face, LOD)>);
 
 fn setup_mesh_thread(
     mut commands: Commands,
@@ -137,10 +138,11 @@ fn setup_mesh_thread(
                     continue;
                 };
                 let face_meshes = chunk.create_face_meshes(&*texture_map, lod);
+                let image = chunk.create_ao_texture_data();
                 for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                     let face = i.into();
                     if mesh_sender
-                        .send((face_mesh, chunk_pos, face, LOD(lod)))
+                        .send((face_mesh, chunk_pos, image.clone(), face, LOD(lod)))
                         .is_err()
                     {
                         println!("mesh for {:?} couldn't be sent", chunk_pos)
@@ -154,6 +156,8 @@ fn setup_mesh_thread(
 pub fn pull_meshes(
     mut commands: Commands,
     mesh_reciever: Res<MeshReciever>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>>,
     mut chunk_ents: ResMut<ChunkEntities>,
     mut mesh_query: Query<(&mut Mesh3d, &mut LOD)>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -164,12 +168,12 @@ pub fn pull_meshes(
     let received_meshes: Vec<_> = mesh_reciever
         .0
         .try_iter()
-        .filter(|(_, chunk_pos, _, _)| load_area.col_dists.contains_key(&(*chunk_pos).into()))
+        .filter(|(_, chunk_pos, _, _, _)| load_area.col_dists.contains_key(&(*chunk_pos).into()))
         .collect();
-    for (mesh_opt, chunk_pos, face, lod) in received_meshes
+    for (mesh_opt, chunk_pos, image, face, lod) in received_meshes
         .into_iter()
         .rev()
-        .unique_by(|(_, pos, face, _)| (*pos, *face))
+        .unique_by(|(_, pos, _, face, _)| (*pos, *face))
     {
         let Some(mesh) = mesh_opt else {
             if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
@@ -188,10 +192,20 @@ pub fn pull_meshes(
                 println!("entity wasn't ready to recieve updated mesh");
             }
         } else if blocks.chunks.contains_key(&chunk_pos) {
+            let ao_image_handle = images.add(image);
+            let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
+            let base = ref_mat.base.clone();
+            // Create a new material instance for this chunk
+            let new_material = materials.add(ExtendedMaterial {
+                base: StandardMaterial { ..base },
+                extension: ArrayTextureMaterial {
+                    ao_data: ao_image_handle,
+                },
+            });
             let ent = commands
                 .spawn((
                     Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(block_tex_array.0.clone_weak()),
+                    MeshMaterial3d(new_material),
                     Transform::from_translation(
                         Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32)
                             * CHUNK_S1 as f32,

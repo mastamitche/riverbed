@@ -1,18 +1,21 @@
 use std::collections::BTreeSet;
 
 use bevy::{
+    image::Image,
     log::info_span,
     prelude::Mesh,
     render::{
         mesh::{Indices, MeshVertexAttribute},
         render_asset::RenderAssetUsages,
-        render_resource::{PrimitiveTopology, VertexFormat},
+        render_resource::{
+            Extent3d, PrimitiveTopology, TextureDimension, TextureFormat, VertexFormat,
+        },
     },
 };
 use binary_greedy_meshing as bgm;
 
 use super::texture_array::TextureMapTrait;
-use crate::world::CHUNK_S1;
+use crate::world::{linearize, CHUNKP_S1, CHUNK_S1};
 use crate::{
     block::Face,
     world::{pad_linearize, Chunk, CHUNKP_S3},
@@ -37,8 +40,6 @@ const MASK_XYZ: u64 = 0b111111_111111_111111;
 /// `0bllll_iiiiiiiiiiiiiiii_ccccccccc_nnn`
 pub const ATTRIBUTE_VOXEL_DATA: MeshVertexAttribute =
     MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Uint32x2);
-pub const ATTRIBUTE_INSTANCE_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("InstanceData", 48757582, VertexFormat::Uint32x2);
 
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
@@ -89,11 +90,11 @@ impl Chunk {
             let face: Face = face_n.into();
             for quad in quads {
                 let voxel_i = (quad >> 32) as usize;
-                let w = MASK_6 & (quad >> 18);
-                let h = MASK_6 & (quad >> 24);
+                let w = (MASK_6 & (quad >> 18)) as u32;
+                let h = (MASK_6 & (quad >> 24)) as u32;
                 let xyz = MASK_XYZ & quad;
                 let block = self.palette[voxel_i];
-                let layer = texture_map.get_texture_index(block, face) as u32;
+
                 let color = match (block, face) {
                     (Block::GrassBlock, Face::Up) => 0b011_111_001,
                     (Block::SeaBlock, _) => 0b110_011_001,
@@ -101,7 +102,7 @@ impl Chunk {
                     _ => 0b111_111_111,
                 };
                 let vertices = face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
-                let quad_info = (layer << 12) | (color << 3) | face_n as u32;
+                let quad_info = (w << 24) | (h << 18) | (color << 3) | face_n as u32;
                 voxel_data.extend_from_slice(&[
                     [vertices[0], quad_info],
                     [vertices[1], quad_info],
@@ -120,5 +121,56 @@ impl Chunk {
         }
         mesh_build_span.exit();
         meshes
+    }
+
+    pub fn create_ao_texture_data(&self) -> Image {
+        // Calculate dimensions
+        let dim = CHUNKP_S1;
+        let u32s_per_row = dim.div_ceil(32); // Round up division
+
+        // Create empty texture data
+        let mut texture_data = vec![0u32; u32s_per_row * dim * dim];
+
+        let voxels = self.data.unpack_u16();
+        // Fill texture data based on block presence (non-air blocks)
+        for y in 0..dim {
+            for z in 0..dim {
+                for x in 0..dim {
+                    // Get block and check if it's not air
+                    let block = self.palette[voxels[linearize(x, y, z)] as usize];
+                    if block != Block::Air {
+                        // Calculate bit position within the u32
+                        let bit_position = x % 32;
+                        let u32_index = (x / 32) + z * u32s_per_row + y * u32s_per_row * dim;
+
+                        // Set the bit
+                        texture_data[u32_index] |= 1u32 << bit_position;
+                    }
+                }
+            }
+        }
+
+        // Convert u32 data to bytes
+        let bytes: Vec<u8> = texture_data
+            .iter()
+            .flat_map(|&value| value.to_le_bytes())
+            .collect();
+
+        // Create the Bevy Image
+        let width = u32s_per_row as u32;
+        let height = dim as u32;
+        let depth = dim as u32;
+
+        Image::new(
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: depth,
+            },
+            TextureDimension::D3,
+            bytes,
+            TextureFormat::R32Uint,
+            RenderAssetUsages::RENDER_WORLD,
+        )
     }
 }

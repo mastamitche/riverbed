@@ -19,6 +19,10 @@
 }
 #endif
 
+@group(2) @binding(100)
+var ao_texture_data: texture_3d<u32>;
+@group(2) @binding(101)
+var ao_texture_sampler: sampler;
 
 const MASK2: u32 = 3;
 const MASK3: u32 = 7;
@@ -26,12 +30,16 @@ const MASK4: u32 = 15;
 const MASK6: u32 = 63;
 const MASK9: u32 = 511;
 const MASK16: u32 = 65535;
+const MASK10: u32 = 0x3FF; // Binary: 1111111111 (10 ones)
+
+const CHUNK_SIZE_FULL: i32 = 64;
+const CHUNK_SIZE: i32 = 62;
+const EPSILON: f32 = 0.0001;
 
 struct VertexInput {
     @builtin(instance_index) instance_index: u32,
     @location(0) voxel_data: vec2<u32>,
 };
-
 struct CustomVertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) world_position: vec4<f32>,
@@ -39,8 +47,9 @@ struct CustomVertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) color: vec4<f32>,
     @location(4) face_light: vec4<f32>,
+    @location(5) wh: vec2<f32>,
+    @location(6) face_normal: vec3<i32>,
 };
-
 
 fn normal_from_id(id: u32) -> vec3<f32> {
     var n: vec3<f32>;
@@ -69,7 +78,31 @@ fn normal_from_id(id: u32) -> vec3<f32> {
     }
     return n;
 }
-
+fn get_face_normal(n_id: u32) -> vec3<i32> {
+    switch n_id {
+        case 0u: {
+            return vec3<i32>(0, 1, 0);  // top
+        }
+        case 1u: {
+            return vec3<i32>(0, -1, 0); // bottom
+        }
+        case 2u: {
+            return vec3<i32>(1, 0, 0);  // right
+        }
+        case 3u: {
+            return vec3<i32>(-1, 0, 0); // left
+        }
+        case 4u: {
+            return vec3<i32>(0, 0, 1);  // front
+        }
+        case 5u:  {
+            return vec3<i32>(0, 0, -1); // back
+        }
+        default: {
+            return vec3<i32>(0, 0, 0);
+        }
+    }
+}
 fn light_from_id(id: u32) -> vec4<f32> {
     switch id {
         case 0u {
@@ -90,11 +123,93 @@ fn light_from_id(id: u32) -> vec4<f32> {
     }
 }
 
+fn affects_face(normal: vec3<i32>, offset: vec3<i32>) -> bool {
+    return dot(normal, offset) <= 0;
+}
+
 fn color_from_id(id: u32) -> vec4<f32> {
     var r = f32(id & MASK3)/f32(MASK3);
     var g = f32((id >> 3) & MASK3)/f32(MASK3);
     var b = f32((id >> 6) & MASK3)/f32(MASK3);
     return vec4(r, g, b, 1.0);
+}
+fn check_voxel_presence(pos: vec3<i32>) -> bool {
+    // Add 1 to each coordinate to account for the 1-voxel border
+    // This converts from chunk-local coordinates (0-61) to data coordinates (1-62)
+    var calc_pos = vec3<i32>(pos.x + 1, pos.y + 1, pos.z + 1);
+    
+    // Check if position is within bounds of the data (0-63)
+    if (calc_pos.x < 0 || calc_pos.x >= 64 || 
+        calc_pos.y < 0 || calc_pos.y >= 64 || 
+        calc_pos.z < 0 || calc_pos.z >= 64) {
+        return false; // Out of bounds
+    }
+    
+    // Calculate texture coordinates according to your texture creation
+    let tex_x = u32(calc_pos.x) / 32u;
+    let tex_y = u32(calc_pos.z);        // Z maps to Y in texture
+    let tex_z = u32(calc_pos.y);        // Y maps to Z in texture
+    
+    // Load the bitmask for this position
+    let bitmask = textureLoad(ao_texture_data, vec3<i32>(i32(tex_x), i32(tex_y), i32(tex_z)), 0).x;
+    
+    // Calculate which bit in the bitmask represents this voxel
+    let bit_position = u32(calc_pos.x) % 32u;
+    
+    // Check if the bit is set
+    return (bitmask & (1u << bit_position)) != 0u;
+}
+fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
+    // Color scheme based on neighbor count
+    switch neighbor_count {
+        case 0: { return vec3<f32>(1.0, 1.0, 1.0); } // White - no neighbors
+        case 1: { return vec3<f32>(1.0, 1.0, 0.0); } // Yellow - 1 neighbor
+        case 2: { return vec3<f32>(0.0, 0.0, 1.0); } // Blue - 2 neighbors
+        case 3: { return vec3<f32>(0.0, 1.0, 0.0); } // Green - 3 neighbors
+        case 4: { return vec3<f32>(1.0, 0.0, 0.0); } // Red - 4 neighbors (fixed)
+        case 5: { return vec3<f32>(1.0, 0.0, 1.0); } // Magenta - 5 neighbors
+        case 6: { return vec3<f32>(0.0, 1.0, 1.0); } // Cyan - 6 neighbors
+        case 7: { return vec3<f32>(0.5, 0.5, 0.5); } // Gray - 7 neighbors
+        default: { return vec3<f32>(0.0, 0.0, 0.0); } // Black - 8+ neighbors
+    }
+}
+
+fn count_ao_neighbors(pos: vec3<i32>, normal: vec3<i32>) -> i32 {
+    var count = 0;
+    
+    // For voxel AO, check the 4 immediate neighbors around the face
+    if (normal.x != 0) {
+        // X-axis face (right or left)
+        let side = normal.x;
+        
+        // Check the 4 immediate neighbors around this face
+        if (check_voxel_presence(pos + vec3<i32>(side-1, 1, 0))) { count += 1; }  // Top
+        if (check_voxel_presence(pos + vec3<i32>(side-1, -1, 0))) { count += 1; } // Bottom
+        if (check_voxel_presence(pos + vec3<i32>(side-1, 0, 1))) { count += 1; }  // Front
+        if (check_voxel_presence(pos + vec3<i32>(side-1, 0, -1))) { count += 1; } // Back
+        
+    } else if (normal.y != 0) {
+        // Y-axis face (top or bottom)
+        let side = normal.y;
+        
+        // Check the 4 immediate neighbors around this face
+        if (check_voxel_presence(pos + vec3<i32>(1, side -1, 0))) { count += 1; }  // Right
+        if (check_voxel_presence(pos + vec3<i32>(-1, side -1, 0))) { count += 1; } // Left
+        if (check_voxel_presence(pos + vec3<i32>(0, side-1, 1))) { count += 1; }  // Front
+        if (check_voxel_presence(pos + vec3<i32>(0, side-1, -1))) { count += 1; } // Back
+        
+    } else if (normal.z != 0) {
+        // Z-axis face (front or back)
+        let side = normal.z;
+        
+        // Check the 4 immediate neighbors around this face
+        if (check_voxel_presence(pos + vec3<i32>(1, 0, side))) { count += 1; }  // Right
+        if (check_voxel_presence(pos + vec3<i32>(-1, 0, side))) { count += 1; } // Left
+        if (check_voxel_presence(pos + vec3<i32>(0, 1, side))) { count += 1; }  // Top
+        if (check_voxel_presence(pos + vec3<i32>(0, -1, side))) { count += 1; } // Bottom
+    }
+    
+    return count;
 }
 
 @vertex
@@ -106,8 +221,6 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     var x = f32(vertex_info & MASK6);
     var y = f32((vertex_info >> 6) & MASK6);
     var z = f32((vertex_info >> 12) & MASK6);
-    var u = f32((vertex_info >> 18) & MASK6);
-    var v = f32((vertex_info >> 24) & MASK6);
     var position = vec4(x, y, z, 1.0);
     
     // Quad specific information
@@ -116,24 +229,56 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     var normal = normal_from_id(n_id);
     var c_id = (quad_info >> 3) & MASK9;
     var face_color = color_from_id(c_id);
-    var texture_layer = quad_info >> 12;
+    var h = f32((quad_info >> 18) & MASK6); // Height is at bits 18-23
+    var w = f32((quad_info >> 24) & MASK6); // Width is at bits 24-29
     var face_light = light_from_id(n_id);
-    var light = f32((quad_info >> 28) & MASK4) / f32(MASK4);
-
+    
     out.position = mesh_position_local_to_clip(
         get_world_from_local(vertex.instance_index),
         position,
     );
-    out.world_position = mesh_position_local_to_world(
+    var world_position = mesh_position_local_to_world(
         get_world_from_local(vertex.instance_index),
         position,
     );
+    out.world_position = world_position;
     out.world_normal = normal;
-    out.uv = vec2(u, v);
+    
+    var uv_x: f32 = 0.0;
+    var uv_y: f32 = 0.0;
+    
+    if (abs(normal.x) > 0.5) {
+        // X-facing normal (YZ plane)
+        // For a quad on the X face, y and z vary
+        uv_x = (position.y % 1.0); // Local position within the starting voxel
+        uv_y = (position.z % 1.0);
+        
+        // Store the base position of the quad in the chunk
+        // This is already done in your code with world_position.w
+    } else if (abs(normal.y) > 0.5) {
+        // Y-facing normal (XZ plane)
+        uv_x = (position.x % 1.0);
+        uv_y = (position.z % 1.0);
+    } else {
+        // Z-facing normal (XY plane)
+        uv_x = (position.x % 1.0);
+        uv_y = (position.y % 1.0);
+    }
+    
+    out.uv = vec2<f32>(uv_x, uv_y);
+    
+    
     out.color = face_color;
     out.face_light = face_light;
+    out.face_normal = get_face_normal(n_id);
+    
+    // Pass quad information needed for fragment shader
+    // Store quad origin and dimensions in world_position.w and face_light.w
+    out.world_position.w = f32(u32(x) | (u32(y) << 10) | (u32(z) << 20));
+    out.wh = vec2(w, h);
     return out;
 }
+
 
 @fragment
 fn fragment(
@@ -156,11 +301,12 @@ fn fragment(
     // generate a PbrInput struct from the StandardMaterial bindings
     var pbr_input = pbr_input_from_standard_material(vertex_output, is_front);
     
-    // sample texture
+    // // sample texture and apply lighting
     pbr_input.material.base_color = in.color * in.face_light;
     
-    // alpha discard
+    // // alpha discard
     pbr_input.material.base_color = fns::alpha_discard(pbr_input.material, pbr_input.material.base_color);
+
 
 #ifdef PREPASS_PIPELINE
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
@@ -168,12 +314,27 @@ fn fragment(
 #else
     var out: FragmentOutput;
     // apply lighting
-    out.color = apply_pbr_lighting(pbr_input);
+    // out.color = apply_pbr_lighting(pbr_input);
 
-    // apply in-shader post processing (fog, alpha-premultiply, and also tonemapping, debanding if the camera is non-hdr)
-    // note this does not include fullscreen postprocessing effects like bloom.
-    out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+    // // // apply in-shader post processing
+    // out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+    // out.color = voxel_color;
 #endif
+    let voxel_x = i32(floor(in.world_position.x +EPSILON));
+    let voxel_y = i32(floor(in.world_position.y +EPSILON));
+    let voxel_z = i32(floor(in.world_position.z +EPSILON));
+    
+    // Calculate local coordinates within the chunk
+    let local_x = (voxel_x % CHUNK_SIZE);
+    let local_y = (voxel_y % CHUNK_SIZE);
+    let local_z = (voxel_z % CHUNK_SIZE);
+    let local_pos = vec3<i32>(local_x, local_y, local_z);
+    
+    let neighbor_count = count_ao_neighbors(local_pos, in.face_normal);
+    let debug_color = get_debug_color(neighbor_count);
+    
+    //out.color =vec4<f32>(in.color.rgb * ao_value, 1.0);
+    out.color = vec4<f32>(debug_color, 1.0);
 
     return out;
 }
