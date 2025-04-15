@@ -34,7 +34,8 @@ const MASK10: u32 = 0x3FF; // Binary: 1111111111 (10 ones)
 
 const CHUNK_SIZE_FULL: i32 = 64;
 const CHUNK_SIZE: i32 = 62;
-const EPSILON: f32 = 0.0001;
+const CHUNK_SIZE_M_1: i32 = 61;
+const EPSILON: f32 = 0.001;
 
 struct VertexInput {
     @builtin(instance_index) instance_index: u32,
@@ -50,6 +51,9 @@ struct CustomVertexOutput {
     @location(5) wh: vec2<f32>,
     @location(6) face_normal: vec3<i32>,
 };
+fn positive_modulo(a: i32, b: i32) -> i32 {
+    return ((a % b) + b) % b;
+}
 
 fn normal_from_id(id: u32) -> vec3<f32> {
     var n: vec3<f32>;
@@ -133,32 +137,18 @@ fn color_from_id(id: u32) -> vec4<f32> {
     var b = f32((id >> 6) & MASK3)/f32(MASK3);
     return vec4(r, g, b, 1.0);
 }
+
 fn check_voxel_presence(pos: vec3<i32>) -> bool {
-    // Add 1 to each coordinate to account for the 1-voxel border
-    // This converts from chunk-local coordinates (0-61) to data coordinates (1-62)
-    var calc_pos = vec3<i32>(pos.x + 1, pos.y + 1, pos.z + 1);
+    var calc_pos = vec3<i32>(pos.z , pos.x, pos.y);
+    calc_pos = calc_pos + vec3<i32>(1,1,1);
+    // Load the value for this position
+    // In R8Uint format, each texel is a single byte (0 or 1)
+    let value = textureLoad(ao_texture_data, calc_pos, 0).r;
     
-    // Check if position is within bounds of the data (0-63)
-    if (calc_pos.x < 0 || calc_pos.x >= 64 || 
-        calc_pos.y < 0 || calc_pos.y >= 64 || 
-        calc_pos.z < 0 || calc_pos.z >= 64) {
-        return false; // Out of bounds
-    }
-    
-    // Calculate texture coordinates according to your texture creation
-    let tex_x = u32(calc_pos.x) / 32u;
-    let tex_y = u32(calc_pos.z);        // Z maps to Y in texture
-    let tex_z = u32(calc_pos.y);        // Y maps to Z in texture
-    
-    // Load the bitmask for this position
-    let bitmask = textureLoad(ao_texture_data, vec3<i32>(i32(tex_x), i32(tex_y), i32(tex_z)), 0).x;
-    
-    // Calculate which bit in the bitmask represents this voxel
-    let bit_position = u32(calc_pos.x) % 32u;
-    
-    // Check if the bit is set
-    return (bitmask & (1u << bit_position)) != 0u;
+    // Check if the value is non-zero (meaning a block is present)
+    return value != 0u;
 }
+
 fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
     // Color scheme based on neighbor count
     switch neighbor_count {
@@ -166,7 +156,7 @@ fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
         case 1: { return vec3<f32>(1.0, 1.0, 0.0); } // Yellow - 1 neighbor
         case 2: { return vec3<f32>(0.0, 0.0, 1.0); } // Blue - 2 neighbors
         case 3: { return vec3<f32>(0.0, 1.0, 0.0); } // Green - 3 neighbors
-        case 4: { return vec3<f32>(1.0, 0.0, 0.0); } // Red - 4 neighbors (fixed)
+        case 4: { return vec3<f32>(1.0, 0.0, 0.0); } // Red - 4 neighbors 
         case 5: { return vec3<f32>(1.0, 0.0, 1.0); } // Magenta - 5 neighbors
         case 6: { return vec3<f32>(0.0, 1.0, 1.0); } // Cyan - 6 neighbors
         case 7: { return vec3<f32>(0.5, 0.5, 0.5); } // Gray - 7 neighbors
@@ -174,41 +164,56 @@ fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
     }
 }
 
-fn count_ao_neighbors(pos: vec3<i32>, normal: vec3<i32>) -> i32 {
+fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     var count = 0;
     
-    // For voxel AO, check the 4 immediate neighbors around the face
-    if (normal.x != 0) {
-        // X-axis face (right or left)
-        let side = normal.x;
-        
-        // Check the 4 immediate neighbors around this face
-        if (check_voxel_presence(pos + vec3<i32>(side-1, 1, 0))) { count += 1; }  // Top
-        if (check_voxel_presence(pos + vec3<i32>(side-1, -1, 0))) { count += 1; } // Bottom
-        if (check_voxel_presence(pos + vec3<i32>(side-1, 0, 1))) { count += 1; }  // Front
-        if (check_voxel_presence(pos + vec3<i32>(side-1, 0, -1))) { count += 1; } // Back
-        
-    } else if (normal.y != 0) {
-        // Y-axis face (top or bottom)
-        let side = normal.y;
-        
-        // Check the 4 immediate neighbors around this face
-        if (check_voxel_presence(pos + vec3<i32>(1, side -1, 0))) { count += 1; }  // Right
-        if (check_voxel_presence(pos + vec3<i32>(-1, side -1, 0))) { count += 1; } // Left
-        if (check_voxel_presence(pos + vec3<i32>(0, side-1, 1))) { count += 1; }  // Front
-        if (check_voxel_presence(pos + vec3<i32>(0, side-1, -1))) { count += 1; } // Back
-        
-    } else if (normal.z != 0) {
-        // Z-axis face (front or back)
-        let side = normal.z;
-        
-        // Check the 4 immediate neighbors around this face
-        if (check_voxel_presence(pos + vec3<i32>(1, 0, side))) { count += 1; }  // Right
-        if (check_voxel_presence(pos + vec3<i32>(-1, 0, side))) { count += 1; } // Left
-        if (check_voxel_presence(pos + vec3<i32>(0, 1, side))) { count += 1; }  // Top
-        if (check_voxel_presence(pos + vec3<i32>(0, -1, side))) { count += 1; } // Bottom
-    }
+    var voxel_x = i32(floor(world_pos.x));
+    var voxel_y = i32(floor(world_pos.y));
+    var voxel_z = i32(floor(world_pos.z));
     
+    if (normal.x < 0) {
+        voxel_x +=1;
+    } else if (normal.y < 0) {
+        voxel_y +=1;
+    } else if (normal.z < 0) {
+        voxel_z +=1;
+    } 
+    
+    let local_x = positive_modulo(voxel_x, CHUNK_SIZE);
+    let local_y = positive_modulo(voxel_y, CHUNK_SIZE);
+    let local_z = positive_modulo(voxel_z, CHUNK_SIZE);
+
+    var calc_pos = vec3<i32>(local_x, local_y, local_z);
+
+    // if (calc_pos.x != 0 && calc_pos.y != 0  && calc_pos.z != 0 ) {
+    //     if (calc_pos.x != CHUNK_SIZE_M_1 && calc_pos.y != CHUNK_SIZE_M_1 && calc_pos.z != CHUNK_SIZE_M_1) {
+    //         return 8;
+    //     }
+    // }
+
+    if (normal.x != 0) {
+        // X-axis face (right)
+        let side = normal.x;
+        if (check_voxel_presence(calc_pos + vec3<i32>(side, 1, 0))) { count += 1; }  // Top
+        if (check_voxel_presence(calc_pos + vec3<i32>(side, -1, 0))) { count += 1; } // Bottom
+        if (check_voxel_presence(calc_pos + vec3<i32>(side, 0, 1))) { count += 1; }  // Front
+        if (check_voxel_presence(calc_pos + vec3<i32>(side, 0, -1))) { count += 1; } // Back
+    } else if (normal.y != 0) {
+        // Y-axis face (top)
+        let side = normal.y;
+        if (check_voxel_presence(calc_pos + vec3<i32>(1, side, 0))) { count += 1; }  // Right
+        if (check_voxel_presence(calc_pos + vec3<i32>(-1, side, 0))) { count += 1; } // Left
+        if (check_voxel_presence(calc_pos + vec3<i32>(0, side, 1))) { count += 1; }  // Front
+        if (check_voxel_presence(calc_pos + vec3<i32>(0, side, -1))) { count += 1; } // Back
+    } else if (normal.z != 0) {
+        // Z-axis face (front)
+        let side = normal.z;
+        if (check_voxel_presence(calc_pos + vec3<i32>(1, 0, side))) { count += 1; }  // Right
+        if (check_voxel_presence(calc_pos + vec3<i32>(-1, 0, side))) { count += 1; } // Left
+        if (check_voxel_presence(calc_pos + vec3<i32>(0, 1, side))) { count += 1; }  // Top
+        if (check_voxel_presence(calc_pos + vec3<i32>(0, -1, side))) { count += 1; } // Bottom
+    }
+
     return count;
 }
 
@@ -218,9 +223,9 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
 
     // Vertex specific information
     var vertex_info = vertex.voxel_data.x;
-    var x = f32(vertex_info & MASK6);
-    var y = f32((vertex_info >> 6) & MASK6);
-    var z = f32((vertex_info >> 12) & MASK6);
+    var x = f32(vertex_info & MASK6) - EPSILON;
+    var y = f32((vertex_info >> 6) & MASK6) - EPSILON;
+    var z = f32((vertex_info >> 12) & MASK6) - EPSILON;
     var position = vec4(x, y, z, 1.0);
     
     // Quad specific information
@@ -237,11 +242,10 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
         get_world_from_local(vertex.instance_index),
         position,
     );
-    var world_position = mesh_position_local_to_world(
+     out.world_position = mesh_position_local_to_world(
         get_world_from_local(vertex.instance_index),
         position,
     );
-    out.world_position = world_position;
     out.world_normal = normal;
     
     var uv_x: f32 = 0.0;
@@ -320,20 +324,16 @@ fn fragment(
     // out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     // out.color = voxel_color;
 #endif
-    let voxel_x = i32(floor(in.world_position.x +EPSILON));
-    let voxel_y = i32(floor(in.world_position.y +EPSILON));
-    let voxel_z = i32(floor(in.world_position.z +EPSILON));
+    // if (local_pos.x == CHUNK_SIZE_M_1 || local_pos.y == CHUNK_SIZE_M_1 || local_pos.z == CHUNK_SIZE_M_1) {
+    //     return out;
+    // }
+    // if (local_pos.x == 0 || local_pos.y == 0  || local_pos.z == 0 ) {
+    //     return out;
+    // }
     
-    // Calculate local coordinates within the chunk
-    let local_x = (voxel_x % CHUNK_SIZE);
-    let local_y = (voxel_y % CHUNK_SIZE);
-    let local_z = (voxel_z % CHUNK_SIZE);
-    let local_pos = vec3<i32>(local_x, local_y, local_z);
-    
-    let neighbor_count = count_ao_neighbors(local_pos, in.face_normal);
+    let neighbor_count = count_ao_neighbors(in.world_position.xyz, in.face_normal);
     let debug_color = get_debug_color(neighbor_count);
     
-    //out.color =vec4<f32>(in.color.rgb * ao_value, 1.0);
     out.color = vec4<f32>(debug_color, 1.0);
 
     return out;

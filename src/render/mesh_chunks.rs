@@ -48,13 +48,11 @@ impl Chunk {
             return voxels;
         }
         let mut res = vec![0; CHUNKP_S3];
-        for x in 0..CHUNK_S1 {
-            for y in 0..CHUNK_S1 {
-                for z in 0..CHUNK_S1 {
-                    let lod_i = pad_linearize(x / lod, y / lod, z / lod);
-                    if res[lod_i] == 0 {
-                        res[lod_i] = voxels[pad_linearize(x, y, z)];
-                    }
+        for x in 0..CHUNKP_S1 {
+            for y in 0..CHUNKP_S1 {
+                for z in 0..CHUNKP_S1 {
+                    let xyz = linearize(x, y, z);
+                    res[xyz] = voxels[xyz];
                 }
             }
         }
@@ -126,10 +124,43 @@ impl Chunk {
     pub fn create_ao_texture_data(&self) -> Image {
         // Calculate dimensions
         let dim = CHUNKP_S1;
-        let u32s_per_row = dim.div_ceil(32); // Round up division
+        // let u32s_per_row = dim.div_ceil(32); // Round up division
+
+        // // Create empty texture data
+        // let mut texture_data = vec![0u32; u32s_per_row * dim * dim];
+
+        // let voxels = self.data.unpack_u16();
+        // // Fill texture data based on block presence (non-air blocks)
+        // for y in 0..dim {
+        //     for z in 0..dim {
+        //         for x in 0..dim {
+        //             // Get block and check if it's not air
+        //             let block = self.palette[voxels[linearize(x, y, z)] as usize];
+        //             if block != Block::Air {
+        //                 // Calculate bit position within the u32
+        //                 let bit_position = x % 32;
+        //                 let u32_index = (x / 32) + z * u32s_per_row + y * u32s_per_row * dim;
+
+        //                 // Set the bit
+        //                 texture_data[u32_index] |= 1u32 << bit_position;
+        //             }
+        //         }
+        //     }
+        // }
+
+        // // Convert u32 data to bytes
+        // let bytes: Vec<u8> = texture_data
+        //     .iter()
+        //     .flat_map(|&value| value.to_le_bytes())
+        //     .collect();
+
+        // // Create the Bevy Image
+        // let width = u32s_per_row as u32;
+        // let height = dim as u32;
+        // let depth = dim as u32;
 
         // Create empty texture data
-        let mut texture_data = vec![0u32; u32s_per_row * dim * dim];
+        let mut texture_data = vec![0u8; dim * dim * dim];
 
         let voxels = self.data.unpack_u16();
         // Fill texture data based on block presence (non-air blocks)
@@ -139,25 +170,29 @@ impl Chunk {
                     // Get block and check if it's not air
                     let block = self.palette[voxels[linearize(x, y, z)] as usize];
                     if block != Block::Air {
+                        if x == 0
+                            || y == 0
+                            || z == 0
+                            || x == dim - 1
+                            || y == dim - 1
+                            || z == dim - 1
+                        {
+                            //TODO, this should be the neighbor block data
+                            println!("Not Air {} {} {} {}", x, y, z, block);
+                        }
                         // Calculate bit position within the u32
                         let bit_position = x % 32;
-                        let u32_index = (x / 32) + z * u32s_per_row + y * u32s_per_row * dim;
+                        let u32_index = linearize(x, y, z);
 
                         // Set the bit
-                        texture_data[u32_index] |= 1u32 << bit_position;
+                        texture_data[u32_index] = 1;
                     }
                 }
             }
         }
 
-        // Convert u32 data to bytes
-        let bytes: Vec<u8> = texture_data
-            .iter()
-            .flat_map(|&value| value.to_le_bytes())
-            .collect();
-
         // Create the Bevy Image
-        let width = u32s_per_row as u32;
+        let width = dim as u32;
         let height = dim as u32;
         let depth = dim as u32;
 
@@ -168,8 +203,8 @@ impl Chunk {
                 depth_or_array_layers: depth,
             },
             TextureDimension::D3,
-            bytes,
-            TextureFormat::R32Uint,
+            texture_data,
+            TextureFormat::R8Uint, //TextureFormat::R32Uint,
             RenderAssetUsages::RENDER_WORLD,
         )
     }

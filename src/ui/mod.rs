@@ -11,17 +11,15 @@ pub struct UIPlugin;
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(EguiPlugin);
-        let initial_pitch_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
-        let initial_pitch: f32 = initial_pitch_degrees.to_radians();
         app.insert_resource(CameraSettings {
             projection_type: ProjectionType::Perspective,
-            fov: 60.0,
+            fov: 5.0,
             scale: 5.0,
             near: 0.1,
             far: 10000.0,
-            distance: 100.0,
-            pitch: initial_pitch,
-            yaw: 0.0,
+            distance: 0.0,
+            pitch: 28.,
+            yaw: 30.0,
         })
         .add_systems(
             Update,
@@ -100,7 +98,7 @@ fn ui_system(mut contexts: EguiContexts, mut camera_settings: ResMut<CameraSetti
 
         match camera_settings.projection_type {
             ProjectionType::Perspective => {
-                ui.add(egui::Slider::new(&mut camera_settings.fov, 0.0..=120.0).text("FOV"));
+                ui.add(egui::Slider::new(&mut camera_settings.fov, 5.0..=120.0).text("FOV"));
             }
             ProjectionType::Orthographic => {
                 ui.add(egui::Slider::new(&mut camera_settings.scale, 0.1..=20.0).text("Scale"));
