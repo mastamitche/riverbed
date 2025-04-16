@@ -225,60 +225,83 @@ impl VoxelWorld {
             0
         }
     }
-
     pub fn mark_change(&self, chunk_pos: ChunkPos, chunked_pos: ChunkedPos, block: Block) {
         self.mark_change_single(chunk_pos);
 
-        // Check and update neighboring chunks
+        // Get border signs for each dimension
         let border_sign_x = VoxelWorld::border_sign(chunked_pos.0);
-        if border_sign_x != 0 {
-            let mut neighbor_chunk_pos = chunk_pos;
-            neighbor_chunk_pos.x += border_sign_x;
-
-            let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
-            let neighbor_chunked_pos = (neighbor_x, chunked_pos.1, chunked_pos.2);
-
-            // Update the neighboring chunk
-            self.chunks
-                .entry(neighbor_chunk_pos)
-                .or_insert_with(|| TrackedChunk::new())
-                .set_no_padding(neighbor_chunked_pos, block);
-
-            self.mark_change_single(neighbor_chunk_pos);
-        }
-
         let border_sign_y = VoxelWorld::border_sign(chunked_pos.1);
-        if border_sign_y != 0 {
-            let mut neighbor_chunk_pos = chunk_pos;
-            neighbor_chunk_pos.y += border_sign_y;
+        let border_sign_z = VoxelWorld::border_sign(chunked_pos.2);
 
-            let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
-            let neighbor_chunked_pos = (chunked_pos.0, neighbor_y, chunked_pos.2);
-
-            // Update the neighboring chunk
-            self.chunks
-                .entry(neighbor_chunk_pos)
-                .or_insert_with(|| TrackedChunk::new())
-                .set_no_padding(neighbor_chunked_pos, block);
-
-            self.mark_change_single(neighbor_chunk_pos);
+        // Skip if we're not at any border
+        if border_sign_x == 0 && border_sign_y == 0 && border_sign_z == 0 {
+            return;
         }
 
-        let border_sign_z = VoxelWorld::border_sign(chunked_pos.2);
-        if border_sign_z != 0 {
-            let mut neighbor_chunk_pos = chunk_pos;
-            neighbor_chunk_pos.z += border_sign_z;
+        // For each possible combination of neighbors (up to 26)
+        for &dx in &[border_sign_x, 0] {
+            // Skip the 0 case if we're not at an x border
+            if dx == 0 && border_sign_x == 0 {
+                continue;
+            }
 
-            let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
-            let neighbor_chunked_pos = (chunked_pos.0, chunked_pos.1, neighbor_z);
+            for &dy in &[border_sign_y, 0] {
+                // Skip the 0 case if we're not at a y border
+                if dy == 0 && border_sign_y == 0 {
+                    continue;
+                }
 
-            // Update the neighboring chunk
-            self.chunks
-                .entry(neighbor_chunk_pos)
-                .or_insert_with(|| TrackedChunk::new())
-                .set_no_padding(neighbor_chunked_pos, block);
+                for &dz in &[border_sign_z, 0] {
+                    // Skip the 0 case if we're not at a z border
+                    if dz == 0 && border_sign_z == 0 {
+                        continue;
+                    }
 
-            self.mark_change_single(neighbor_chunk_pos);
+                    // Skip the original chunk
+                    if dx == 0 && dy == 0 && dz == 0 {
+                        continue;
+                    }
+
+                    // Calculate neighbor chunk position
+                    let mut neighbor_chunk_pos = chunk_pos;
+                    neighbor_chunk_pos.x += dx;
+                    neighbor_chunk_pos.y += dy;
+                    neighbor_chunk_pos.z += dz;
+
+                    // Calculate neighbor chunked position
+                    let neighbor_x = if dx < 0 {
+                        CHUNKP_S1 - 1
+                    } else if dx > 0 {
+                        0
+                    } else {
+                        chunked_pos.0
+                    };
+                    let neighbor_y = if dy < 0 {
+                        CHUNKP_S1 - 1
+                    } else if dy > 0 {
+                        0
+                    } else {
+                        chunked_pos.1
+                    };
+                    let neighbor_z = if dz < 0 {
+                        CHUNKP_S1 - 1
+                    } else if dz > 0 {
+                        0
+                    } else {
+                        chunked_pos.2
+                    };
+
+                    let neighbor_chunked_pos = (neighbor_x, neighbor_y, neighbor_z);
+
+                    // Update the neighboring chunk
+                    self.chunks
+                        .entry(neighbor_chunk_pos)
+                        .or_insert_with(|| TrackedChunk::new())
+                        .set_no_padding(neighbor_chunked_pos, block);
+
+                    self.mark_change_single(neighbor_chunk_pos);
+                }
+            }
         }
     }
 

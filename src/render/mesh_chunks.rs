@@ -123,7 +123,7 @@ impl Chunk {
 
     pub fn create_ao_texture_data(&self) -> Image {
         // Calculate dimensions
-        let dim = CHUNKP_S1;
+        // let dim = CHUNKP_S1;
         // let u32s_per_row = dim.div_ceil(32); // Round up division
 
         // // Create empty texture data
@@ -159,6 +159,7 @@ impl Chunk {
         // let height = dim as u32;
         // let depth = dim as u32;
 
+        let dim = CHUNKP_S1;
         // Create empty texture data
         let mut texture_data = vec![0u8; dim * dim * dim];
 
@@ -171,7 +172,6 @@ impl Chunk {
                     let block = self.palette[voxels[linearize(x, y, z)] as usize];
                     if block != Block::Air {
                         // Calculate bit position within the u32
-                        let bit_position = x % 32;
                         let u32_index = linearize(x, y, z);
 
                         // Set the bit

@@ -167,23 +167,46 @@ fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
 fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     var count = 0;
     
-    var voxel_x = i32(floor(world_pos.x));
-    var voxel_y = i32(floor(world_pos.y));
-    var voxel_z = i32(floor(world_pos.z));
+    var voxel_x = i32(floor(world_pos.x - (f32(normal.x)/2.0)));
+    var voxel_y = i32(floor(world_pos.y - (f32(normal.y)/2.0)));
+    var voxel_z = i32(floor(world_pos.z - (f32(normal.z)/2.0)));
     
+    if (normal.x > 0) {
+        // voxel_x +=1;
+    } else if (normal.y > 0) {
+        // voxel_y +=1;
+    } else if (normal.z > 0) {
+        // voxel_z += 1;
+    }     
     if (normal.x < 0) {
-        voxel_x +=1;
+        // voxel_x +=1;
     } else if (normal.y < 0) {
-        voxel_y +=1;
+        // voxel_y +=1;
     } else if (normal.z < 0) {
-        voxel_z +=1;
+        // voxel_z +=1;
     } 
     
-    let local_x = positive_modulo(voxel_x, CHUNK_SIZE);
-    let local_y = positive_modulo(voxel_y, CHUNK_SIZE);
-    let local_z = positive_modulo(voxel_z, CHUNK_SIZE);
+    
+    let chunk_x = positive_modulo(voxel_x, CHUNK_SIZE);
+    let chunk_y = positive_modulo(voxel_y, CHUNK_SIZE);
+    let chunk_z = positive_modulo(voxel_z, CHUNK_SIZE);
 
-    var calc_pos = vec3<i32>(local_x, local_y, local_z);
+    var chunk_pos = vec3<i32>(chunk_x, chunk_y, chunk_z);
+    if (normal.x > 0) {
+        // chunk_pos.x +=1;
+    } else if (normal.y > 0) {
+        // chunk_pos.y +=1;
+    } else if (normal.z > 0) {
+        //chunk_pos.z +=1;
+    }     
+    if (normal.x < 0) {
+        // chunk_pos.x +=1;
+    } else if (normal.y < 0) {
+        // chunk_pos.y +=1;
+    } else if (normal.z < 0) {
+        // chunk_pos.z +=1;
+    } 
+
 
     // if (calc_pos.x != 0 && calc_pos.y != 0  && calc_pos.z != 0 ) {
     //     if (calc_pos.x != CHUNK_SIZE_M_1 && calc_pos.y != CHUNK_SIZE_M_1 && calc_pos.z != CHUNK_SIZE_M_1) {
@@ -192,7 +215,7 @@ fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     // }
 
     // if (calc_pos.x == CHUNK_SIZE_M_1 || calc_pos.y == CHUNK_SIZE_M_1 || calc_pos.z == CHUNK_SIZE_M_1) {
-    //     return 8;
+    //     return 5;
     // }
 
     // if (calc_pos.x == 0 || calc_pos.y == 0  || calc_pos.z == 0 ) {
@@ -202,24 +225,24 @@ fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     if (normal.x != 0) {
         // X-axis face (right)
         let side = normal.x;
-        if (check_voxel_presence(calc_pos + vec3<i32>(side, 1, 0))) { count += 1; }  // Top
-        if (check_voxel_presence(calc_pos + vec3<i32>(side, -1, 0))) { count += 1; } // Bottom
-        if (check_voxel_presence(calc_pos + vec3<i32>(side, 0, 1))) { count += 1; }  // Front
-        if (check_voxel_presence(calc_pos + vec3<i32>(side, 0, -1))) { count += 1; } // Back
+        if (check_voxel_presence(chunk_pos + vec3<i32>(side, 1, 0))) { count += 1; }  // Top
+        if (check_voxel_presence(chunk_pos + vec3<i32>(side, -1, 0))) { count += 1; } // Bottom
+        if (check_voxel_presence(chunk_pos + vec3<i32>(side, 0, 1))) { count += 1; }  // Front
+        if (check_voxel_presence(chunk_pos + vec3<i32>(side, 0, -1))) { count += 1; } // Back
     } else if (normal.y != 0) {
         // Y-axis face (top)
-        let side = normal.y;
-        if (check_voxel_presence(calc_pos + vec3<i32>(1, side, 0))) { count += 1; }  // Right
-        if (check_voxel_presence(calc_pos + vec3<i32>(-1, side, 0))) { count += 1; } // Left
-        if (check_voxel_presence(calc_pos + vec3<i32>(0, side, 1))) { count += 1; }  // Front
-        if (check_voxel_presence(calc_pos + vec3<i32>(0, side, -1))) { count += 1; } // Back
+        let side = normal.y ;
+        if (check_voxel_presence(chunk_pos + vec3<i32>(1, side, 0))) { count += 1; }  // Right
+        if (check_voxel_presence(chunk_pos + vec3<i32>(-1, side, 0))) { count += 1; } // Left
+        if (check_voxel_presence(chunk_pos + vec3<i32>(0, side, 1))) { count += 1; }  // Front
+        if (check_voxel_presence(chunk_pos + vec3<i32>(0, side, -1))) { count += 1; } // Back
     } else if (normal.z != 0) {
         // Z-axis face (front)
-        let side = normal.z;
-        if (check_voxel_presence(calc_pos + vec3<i32>(1, 0, side))) { count += 1; }  // Right
-        if (check_voxel_presence(calc_pos + vec3<i32>(-1, 0, side))) { count += 1; } // Left
-        if (check_voxel_presence(calc_pos + vec3<i32>(0, 1, side))) { count += 1; }  // Top
-        if (check_voxel_presence(calc_pos + vec3<i32>(0, -1, side))) { count += 1; } // Bottom
+        let side = normal.z ;
+        if (check_voxel_presence(chunk_pos + vec3<i32>(1, 0, side))) { count += 1; }  // Right
+        if (check_voxel_presence(chunk_pos + vec3<i32>(-1, 0, side))) { count += 1; } // Left
+        if (check_voxel_presence(chunk_pos + vec3<i32>(0, 1, side))) { count += 1; }  // Top
+        if (check_voxel_presence(chunk_pos + vec3<i32>(0, -1, side))) { count += 1; } // Bottom
     }
 
     return count;
@@ -250,7 +273,7 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
         get_world_from_local(vertex.instance_index),
         position,
     );
-     out.world_position = mesh_position_local_to_world(
+    out.world_position = mesh_position_local_to_world(
         get_world_from_local(vertex.instance_index),
         position,
     );
@@ -326,11 +349,11 @@ fn fragment(
 #else
     var out: FragmentOutput;
     // apply lighting
-    // out.color = apply_pbr_lighting(pbr_input);
+    out.color = apply_pbr_lighting(pbr_input);
 
     // // // apply in-shader post processing
-    // out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-    // out.color = voxel_color;
+    out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+    //out.color = voxel_color;
 #endif
     // if (local_pos.x == CHUNK_SIZE_M_1 || local_pos.y == CHUNK_SIZE_M_1 || local_pos.z == CHUNK_SIZE_M_1) {
     //     return out;
