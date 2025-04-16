@@ -170,16 +170,6 @@ impl Chunk {
                     // Get block and check if it's not air
                     let block = self.palette[voxels[linearize(x, y, z)] as usize];
                     if block != Block::Air {
-                        if x == 0
-                            || y == 0
-                            || z == 0
-                            || x == dim - 1
-                            || y == dim - 1
-                            || z == dim - 1
-                        {
-                            //TODO, this should be the neighbor block data
-                            println!("Not Air {} {} {} {}", x, y, z, block);
-                        }
                         // Calculate bit position within the u32
                         let bit_position = x % 32;
                         let u32_index = linearize(x, y, z);

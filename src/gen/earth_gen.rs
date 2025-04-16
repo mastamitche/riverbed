@@ -1,11 +1,12 @@
-use crate::{Block, gen::Soils};
 use crate::world::{
-    BlockPos, BlockPos2d, ColPos, VoxelWorld, CHUNK_S1, CHUNK_S1I, MAX_GEN_HEIGHT, WATER_H,
+    BlockPos, BlockPos2d, ChunkPos, ColPos, VoxelWorld, CHUNK_S1, CHUNK_S1I, MAX_GEN_HEIGHT,
+    WATER_H,
 };
-use riverbed_closest::{ranges, ClosestTrait};
+use crate::{gen::Soils, Block};
 use bevy::prelude::info_span;
 use itertools::iproduct;
 use noise_algebra::NoiseSource;
+use riverbed_closest::{ranges, ClosestTrait};
 use std::{collections::HashMap, ops::RangeInclusive};
 
 use super::tree::Trees;
@@ -76,6 +77,7 @@ impl Earth {
         let rift = rift.map(|r| (r * (MAX_GEN_HEIGHT / 2) as f32) as i32);
         gen_span.exit();
         let fill_span = info_span!("chunk filling", name = "chunk filling").entered();
+        let mut height = 0;
         for (dx, dz) in iproduct!(0..CHUNK_S1, 0..CHUNK_S1) {
             let (base_y, t, h, rocks, rift, iron) = (
                 ys[[dx, dz]],
@@ -123,6 +125,16 @@ impl Earth {
                     Block::SeaBlock,
                 );
             }
+        }
+        let max_chunk_height = (MAX_GEN_HEIGHT / CHUNK_S1) as i32;
+        for y in 0..max_chunk_height as i32 {
+            let chunk_pos = ChunkPos {
+                x: col.x,
+                y,
+                z: col.z,
+                realm: col.realm,
+            };
+            world.set_loaded(chunk_pos);
         }
         fill_span.exit();
         let tree_span = info_span!("tree gen", name = "tree gen").entered();

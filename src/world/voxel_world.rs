@@ -1,6 +1,6 @@
 use super::{
     chunked, pos2d::chunks_in_col, BlockPos, BlockPos2d, Chunk, ChunkPos, ChunkedPos, ColPos,
-    ColedPos, Realm, CHUNK_S1, MAX_HEIGHT, Y_CHUNKS,
+    ColedPos, Realm, CHUNKP_S1, CHUNK_S1, CHUNK_S1I, MAX_HEIGHT, Y_CHUNKS,
 };
 use crate::Block;
 use bevy::prelude::{Resource, Vec3};
@@ -12,6 +12,7 @@ use std::{
 
 pub struct TrackedChunk {
     chunk: Chunk,
+    pub loaded: bool,
     pub changed: bool,
 }
 
@@ -19,6 +20,7 @@ impl TrackedChunk {
     pub fn new() -> Self {
         Self {
             chunk: Chunk::new(),
+            loaded: false,
             changed: false,
         }
     }
@@ -71,7 +73,7 @@ impl VoxelWorld {
             .entry(chunk_pos)
             .or_insert_with(|| TrackedChunk::new())
             .set(chunked_pos, block);
-        self.mark_change(chunk_pos, chunked_pos);
+        self.mark_change(chunk_pos, chunked_pos, block);
     }
 
     pub fn set_block_safe(&self, pos: BlockPos, block: Block) -> bool {
@@ -83,8 +85,17 @@ impl VoxelWorld {
             .entry(chunk_pos)
             .or_insert_with(|| TrackedChunk::new())
             .set(chunked_pos, block);
-        self.mark_change(chunk_pos, chunked_pos);
+        self.mark_change(chunk_pos, chunked_pos, block);
         true
+    }
+
+    pub fn set_loaded(&self, chunk_pos: ChunkPos) -> bool {
+        if let Some(mut chunk) = self.chunks.get_mut(&chunk_pos) {
+            chunk.loaded = true;
+            true
+        } else {
+            false // Chunk doesn't exist, so we can't mark it as loaded
+        }
     }
 
     pub fn set_yrange(
@@ -92,26 +103,28 @@ impl VoxelWorld {
         col_pos: ColPos,
         (x, z): ColedPos,
         top: i32,
-        mut height: usize,
+        height: usize,
         block: Block,
     ) {
-        // USED BY TERRAIN GENERATION - bypasses change detection for efficiency
-        let (mut cy, mut dy) = chunked(top);
-        while height > 0 && cy >= 0 {
-            let chunk_pos = ChunkPos {
-                x: col_pos.x,
-                y: cy,
-                z: col_pos.z,
+        // Convert column position and coordinates to base BlockPos
+        let base_x = col_pos.x * CHUNK_S1I + x as i32;
+        let base_z = col_pos.z * CHUNK_S1I + z as i32;
+
+        // Starting from the top, set each block down to the specified height
+        for y_offset in 0..height {
+            let y = top - y_offset as i32;
+            if y < 0 {
+                break; // Don't go below zero
+            }
+
+            let pos = BlockPos {
+                x: base_x,
+                y,
+                z: base_z,
                 realm: col_pos.realm,
             };
-            let h = height.min(dy);
-            self.chunks
-                .entry(chunk_pos)
-                .or_insert_with(|| TrackedChunk::new())
-                .set_yrange((x, dy, z), h, block);
-            height -= h;
-            cy -= 1;
-            dy = CHUNK_S1 - 1;
+
+            self.set_block(pos, block);
         }
     }
 
@@ -123,7 +136,7 @@ impl VoxelWorld {
             .or_insert_with(|| TrackedChunk::new())
             .set_if_empty(chunked_pos, block)
         {
-            self.mark_change(chunk_pos, chunked_pos);
+            self.mark_change(chunk_pos, chunked_pos, block);
         }
     }
 
@@ -213,28 +226,59 @@ impl VoxelWorld {
         }
     }
 
-    fn mark_change(&self, chunk_pos: ChunkPos, chunked_pos: ChunkedPos) {
+    pub fn mark_change(&self, chunk_pos: ChunkPos, chunked_pos: ChunkedPos, block: Block) {
         self.mark_change_single(chunk_pos);
-        // register change for neighboring chunks
+
+        // Check and update neighboring chunks
         let border_sign_x = VoxelWorld::border_sign(chunked_pos.0);
         if border_sign_x != 0 {
-            let mut neighbor = chunk_pos;
-            neighbor.x += border_sign_x;
-            self.mark_change_single(neighbor);
+            let mut neighbor_chunk_pos = chunk_pos;
+            neighbor_chunk_pos.x += border_sign_x;
+
+            let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (neighbor_x, chunked_pos.1, chunked_pos.2);
+
+            // Update the neighboring chunk
+            self.chunks
+                .entry(neighbor_chunk_pos)
+                .or_insert_with(|| TrackedChunk::new())
+                .set_no_padding(neighbor_chunked_pos, block);
+
+            self.mark_change_single(neighbor_chunk_pos);
         }
+
         let border_sign_y = VoxelWorld::border_sign(chunked_pos.1);
         if border_sign_y != 0 {
-            let mut neighbor = chunk_pos;
-            neighbor.y += border_sign_y;
-            if neighbor.y >= 0 && neighbor.y < Y_CHUNKS as i32 {
-                self.mark_change_single(neighbor);
-            }
+            let mut neighbor_chunk_pos = chunk_pos;
+            neighbor_chunk_pos.y += border_sign_y;
+
+            let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (chunked_pos.0, neighbor_y, chunked_pos.2);
+
+            // Update the neighboring chunk
+            self.chunks
+                .entry(neighbor_chunk_pos)
+                .or_insert_with(|| TrackedChunk::new())
+                .set_no_padding(neighbor_chunked_pos, block);
+
+            self.mark_change_single(neighbor_chunk_pos);
         }
+
         let border_sign_z = VoxelWorld::border_sign(chunked_pos.2);
         if border_sign_z != 0 {
-            let mut neighbor = chunk_pos;
-            neighbor.z += border_sign_z;
-            self.mark_change_single(neighbor);
+            let mut neighbor_chunk_pos = chunk_pos;
+            neighbor_chunk_pos.z += border_sign_z;
+
+            let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (chunked_pos.0, chunked_pos.1, neighbor_z);
+
+            // Update the neighboring chunk
+            self.chunks
+                .entry(neighbor_chunk_pos)
+                .or_insert_with(|| TrackedChunk::new())
+                .set_no_padding(neighbor_chunked_pos, block);
+
+            self.mark_change_single(neighbor_chunk_pos);
         }
     }
 
@@ -309,4 +353,3 @@ impl VoxelWorld {
         }
     }
 }
-

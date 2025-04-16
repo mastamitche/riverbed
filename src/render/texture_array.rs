@@ -5,7 +5,7 @@ use crate::{
     Block,
 };
 use bevy::{
-    asset::LoadedFolder,
+    asset::{load_internal_asset, LoadedFolder},
     pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
     prelude::*,
     reflect::TypePath,
@@ -19,10 +19,13 @@ use bevy::{
 use dashmap::DashMap;
 use std::sync::Arc;
 
+const CHUNK_MATERIAL_SHADER: Handle<Shader> = Handle::weak_from_u128(102258915422227);
+
 pub struct TextureArrayPlugin;
 
 impl Plugin for TextureArrayPlugin {
     fn build(&self, app: &mut App) {
+        load_internal_asset!(app, CHUNK_MATERIAL_SHADER, "chunk.wgsl", Shader::from_wgsl);
         app.insert_resource(TextureMap(Arc::new(DashMap::new())))
             .add_plugins(MaterialPlugin::<
                 ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>,
@@ -96,11 +99,11 @@ pub struct ArrayTextureMaterial {
 
 impl MaterialExtension for ArrayTextureMaterial {
     fn vertex_shader() -> ShaderRef {
-        "shaders/chunk.wgsl".into()
+        CHUNK_MATERIAL_SHADER.into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/chunk.wgsl".into()
+        CHUNK_MATERIAL_SHADER.into()
     }
 
     fn specialize(

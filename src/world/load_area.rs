@@ -48,7 +48,7 @@ impl PlayerArea {
         chunks
             .iter()
             .filter_map(|entry| {
-                if entry.value().changed {
+                if entry.value().changed && entry.value().loaded {
                     Some(*entry.key())
                 } else {
                     None
@@ -78,4 +78,3 @@ impl PlayerArea {
         ))
     }
 }
-

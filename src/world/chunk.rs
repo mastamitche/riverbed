@@ -1,7 +1,11 @@
+use super::{
+    pos::{ChunkedPos, ColedPos},
+    utils::Palette,
+    CHUNKP_S1, CHUNKP_S2, CHUNKP_S3, CHUNK_S1,
+};
+use crate::Block;
 use itertools::Itertools;
 use packed_uints::PackedUints;
-use crate::Block;
-use super::{pos::{ChunkedPos, ColedPos}, utils::Palette, CHUNKP_S1, CHUNKP_S2, CHUNKP_S3, CHUNK_S1};
 
 #[derive(Debug)]
 pub struct Chunk {
@@ -14,7 +18,7 @@ pub fn linearize(x: usize, y: usize, z: usize) -> usize {
 }
 
 pub fn pad_linearize(x: usize, y: usize, z: usize) -> usize {
-    z + 1 + (x+1) * CHUNKP_S1 + (y+1) * CHUNKP_S2
+    z + 1 + (x + 1) * CHUNKP_S1 + (y + 1) * CHUNKP_S2
 }
 
 impl Chunk {
@@ -22,6 +26,10 @@ impl Chunk {
         &self.palette[self.data.get(pad_linearize(x, y, z))]
     }
 
+    pub fn set_no_padding(&mut self, (x, y, z): ChunkedPos, block: Block) {
+        let idx = linearize(x, y, z);
+        self.data.set(idx, self.palette.index(block));
+    }
     pub fn set(&mut self, (x, y, z): ChunkedPos, block: Block) {
         let idx = pad_linearize(x, y, z);
         self.data.set(idx, self.palette.index(block));
@@ -31,10 +39,10 @@ impl Chunk {
         let value = self.palette.index(block);
         // Note: we do end+1 because set_range(_step) is not inclusive
         self.data.set_range_step(
-            pad_linearize(x, top - height, z), 
-            pad_linearize(x, top, z)+1, 
+            pad_linearize(x, top - height, z),
+            pad_linearize(x, top, z) + 1,
             CHUNKP_S2,
-            value
+            value,
         );
     }
 
@@ -42,7 +50,7 @@ impl Chunk {
     pub fn copy_column(&self, buffer: &mut [Block], (x, z): ColedPos, lod: usize) {
         let start = pad_linearize(x, 0, z);
         let mut i = 0;
-        for idx in (start..(start+CHUNK_S1)).step_by(lod) {
+        for idx in (start..(start + CHUNK_S1)).step_by(lod) {
             buffer[i] = self.palette[self.data.get(idx)];
             i += 1;
         }
@@ -72,19 +80,22 @@ impl From<&[Block]> for Chunk {
     fn from(values: &[Block]) -> Self {
         let mut palette = Palette::new();
         palette.index(Block::Air);
-        let values = values.iter().map(|v| palette.index(v.clone())).collect_vec();
+        let values = values
+            .iter()
+            .map(|v| palette.index(v.clone()))
+            .collect_vec();
         let data = PackedUints::from(values.as_slice());
-        Chunk {data, palette}
+        Chunk { data, palette }
     }
 }
 
 impl Chunk {
     pub fn new() -> Self {
         let mut palette = Palette::new();
-        palette.index(Block::Air); 
+        palette.index(Block::Air);
         Chunk {
             data: PackedUints::new(CHUNKP_S3),
-            palette: palette, 
+            palette: palette,
         }
     }
 }

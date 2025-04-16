@@ -191,6 +191,14 @@ fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     //     }
     // }
 
+    // if (calc_pos.x == CHUNK_SIZE_M_1 || calc_pos.y == CHUNK_SIZE_M_1 || calc_pos.z == CHUNK_SIZE_M_1) {
+    //     return 8;
+    // }
+
+    // if (calc_pos.x == 0 || calc_pos.y == 0  || calc_pos.z == 0 ) {
+    //     return 8;
+    // }
+
     if (normal.x != 0) {
         // X-axis face (right)
         let side = normal.x;
