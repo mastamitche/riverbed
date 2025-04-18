@@ -33,6 +33,8 @@ const MASK16: u32 = 65535;
 const MASK10: u32 = 0x3FF; // Binary: 1111111111 (10 ones)
 
 const CHUNK_SIZE_FULL: i32 = 64;
+const CHUNK_SIZE_FULL_POW2: i32 = CHUNK_SIZE_FULL * CHUNK_SIZE_FULL;
+const CHUNK_SIZE_FULL_POW3: i32 = CHUNK_SIZE_FULL_POW2 * CHUNK_SIZE_FULL;
 const CHUNK_SIZE: i32 = 62;
 const CHUNK_SIZE_M_1: i32 = 61;
 const EPSILON: f32 = 0.001;
@@ -138,13 +140,6 @@ fn color_from_id(id: u32) -> vec4<f32> {
     return vec4(r, g, b, 1.0);
 }
 
-fn check_voxel_presence(pos: vec3<i32>) -> bool {
-    var calc_pos = vec3<i32>(pos.z , pos.x, pos.y);
-    calc_pos = calc_pos + vec3<i32>(1,1,1);
-    let value = textureLoad(ao_texture_data, calc_pos, 0).r;
-    
-    return value != 0u;
-}
 
 fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
     // Color scheme based on neighbor count
@@ -161,6 +156,30 @@ fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
     }
 }
 
+fn check_voxel_presence(pos: vec3<i32>) -> bool {
+    var calc_pos = vec3<i32>(pos.z, pos.x, pos.y);
+    calc_pos = calc_pos + vec3<i32>(1, 1, 1);
+    
+    // Calculate which u32 contains our bit (index / 32)
+    let bit_index = calc_pos.x + calc_pos.y * CHUNK_SIZE_FULL + calc_pos.z * CHUNK_SIZE_FULL * CHUNK_SIZE_FULL;
+    let u32_index = bit_index / 32;
+    
+    // Calculate which bit within that u32 (index % 32)
+    let bit_position = bit_index % 32;
+    
+    // Calculate the texture coordinates to access the correct u32
+    let chunk_size_packed = (CHUNK_SIZE_FULL + 31) / 32;
+    let texture_x = u32_index % chunk_size_packed;
+    let texture_y = (u32_index / chunk_size_packed) % CHUNK_SIZE_FULL;
+    let texture_z = u32_index / (chunk_size_packed * CHUNK_SIZE_FULL);
+    
+    // Load the u32 value from the texture
+    let packed_value = textureLoad(ao_texture_data, vec3<i32>(texture_x, texture_y, texture_z), 0).r;
+    
+    // Extract the correct bit
+    let mask = 1u << u32(bit_position);
+    return (packed_value & mask) != 0u;
+}
 fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     var count = 0;
     
@@ -506,8 +525,8 @@ fn fragment(
     
 #endif
 
-    let neighbor_count = count_ao_neighbors(in.world_position.xyz, in.face_normal);
-    let debug_color = get_debug_color(neighbor_count);
+    // let neighbor_count = count_ao_neighbors(in.world_position.xyz, in.face_normal);
+    // let debug_color = get_debug_color(neighbor_count);
     let ao = calc_ao(in.world_position.xyz, in.face_normal);
     out.color = vec4<f32>(out.color.r*ao,out.color.g*ao,out.color.b*ao, 1.0);
 

@@ -120,58 +120,47 @@ impl Chunk {
         mesh_build_span.exit();
         meshes
     }
-
-    pub fn create_ao_texture_data(&self, chunk_pos: ChunkPos) -> Image {
+    pub fn create_ao_texture_data(&self) -> Image {
         let dim = CHUNKP_S1;
-        // Create empty texture data
-        let mut texture_data = vec![0u8; CHUNKP_S3];
+
+        // Calculate how many u32s we need (CHUNKP_S3 / 32, rounded up)
+        let u32_count = (CHUNKP_S3 + 31) / 32;
+        let mut texture_data = vec![0u32; u32_count];
 
         let voxels = self.data.unpack_u16();
-        // Fill texture data based on block presence (non-air blocks)
-        let mut max_x = 0;
-        let mut max_y = 0;
-        let mut max_z = 0;
-        let mut zero_x = 0;
-        let mut zero_y = 0;
-        let mut zero_z = 0;
 
         for y in 0..dim {
             for z in 0..dim {
                 for x in 0..dim {
                     let xyz = linearize(x, y, z);
-                    if x == 0 && voxels[xyz] != 0 {
-                        zero_x += 1;
-                    }
-                    if y == 0 && voxels[xyz] != 0 {
-                        zero_y += 1;
-                    }
-                    if z == 0 && voxels[xyz] != 0 {
-                        zero_z += 1;
-                    }
-                    if x == dim - 1 && voxels[xyz] != 0 {
-                        max_x += 1;
-                    }
-                    if y == dim - 1 && voxels[xyz] != 0 {
-                        max_y += 1;
-                    }
-                    if z == dim - 1 && voxels[xyz] != 0 {
-                        max_z += 1;
-                    }
 
-                    texture_data[xyz] = if voxels[xyz] != 0 { 1 } else { 0 }
+                    if voxels[xyz] != 0 {
+                        // Calculate which u32 and which bit within that u32
+                        let u32_index = xyz / 32;
+                        let bit_position = xyz % 32;
+
+                        // Set the appropriate bit
+                        texture_data[u32_index] |= 1 << bit_position;
+                    }
                 }
             }
         }
 
+        // Convert u32 array to bytes using bytemuck
+        let bytes = bytemuck::cast_slice(&texture_data).to_vec();
+
+        // Need to adjust dimensions to account for the packing
+        let width = (dim + 31) / 32; // Width in terms of u32s
+
         Image::new(
             Extent3d {
-                width: dim as u32,
+                width: width as u32,
                 height: dim as u32,
                 depth_or_array_layers: dim as u32,
             },
             TextureDimension::D3,
-            texture_data,
-            TextureFormat::R8Uint, //TextureFormat::R32Uint,
+            bytes,
+            TextureFormat::R32Uint, //R8Uint
             RenderAssetUsages::RENDER_WORLD,
         )
     }

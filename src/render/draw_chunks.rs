@@ -183,7 +183,7 @@ pub fn pull_meshes(
         if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
             if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
                 let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
-                let image = chunk.create_ao_texture_data(chunk_pos);
+                let image = chunk.create_ao_texture_data();
                 let ao_image_handle = images.add(image);
                 chunk.ao_image = Some(ao_image_handle.clone());
                 chunk.meshing = false;
@@ -205,7 +205,7 @@ pub fn pull_meshes(
         } else if blocks.chunks.contains_key(&chunk_pos) {
             let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
             if chunk.ao_image.is_none() {
-                let image = chunk.create_ao_texture_data(chunk_pos);
+                let image = chunk.create_ao_texture_data();
                 let ao_image_handle = images.add(image);
                 chunk.ao_image = Some(ao_image_handle.clone());
                 chunk.meshing = false;
