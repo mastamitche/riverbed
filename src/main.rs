@@ -10,6 +10,7 @@ mod world;
 include!(concat!(env!("OUT_DIR"), "/blocks.rs"));
 use agents::{MovementPlugin, PlayerPlugin};
 use bevy::{
+    core_pipeline::experimental::taa::TemporalAntiAliasPlugin,
     image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
     prelude::*,
     render::{
@@ -84,6 +85,7 @@ fn main() {
             seed: SEED,
             rng: ChaCha8Rng::seed_from_u64(SEED),
         })
+        .add_plugins(TemporalAntiAliasPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins(TextureLoadPlugin)
         .add_plugins(UIPlugin)

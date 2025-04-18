@@ -1,4 +1,6 @@
 use crate::agents::{PlayerControlled, PlayerSpawn, AABB};
+use bevy::core_pipeline::experimental::taa::TemporalAntiAliasing;
+use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::render::camera::ScalingMode;
 use bevy::window::CursorGrabMode;
 use bevy::{pbr::VolumetricFog, prelude::*};
@@ -50,6 +52,10 @@ pub fn cam_setup(
 
     let cam = commands
         .spawn((
+            Camera {
+                hdr: true,
+                ..default()
+            },
             Camera3d::default(),
             Transform::from_xyz(
                 aabb.0.x / 2.,
@@ -70,6 +76,9 @@ pub fn cam_setup(
                 },
                 ..default()
             },
+            Msaa::Off,
+            // ScreenSpaceAmbientOcclusion::default(),
+            // TemporalAntiAliasing::default(),
             VolumetricFog::default(),
         ))
         .insert(InputManagerBundle::<CameraMovement> {
