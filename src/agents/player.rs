@@ -37,7 +37,7 @@ impl Plugin for PlayerPlugin {
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
             )
-            .add_systems(Update, move_player);
+            .add_systems(Update, (move_player, toggle_fly));
     }
 }
 
@@ -84,7 +84,7 @@ pub enum DevCommand {
 pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
     let realm = Realm::Overworld;
     // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
-    let rd = RenderDistance(8);
+    let rd = RenderDistance(6);
     commands
         .spawn((
             Transform {

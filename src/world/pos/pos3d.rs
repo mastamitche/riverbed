@@ -4,6 +4,7 @@ use crate::{
     Block,
 };
 use bevy::prelude::Vec3;
+use std::fmt::{Display, Formatter, Result};
 use std::ops::{Add, BitXor};
 
 #[derive(Clone, Copy, Eq, PartialEq, Default, Debug, Hash)]
@@ -46,6 +47,26 @@ impl<const U: usize> Pos3d<U> {
 pub type BlockPos = Pos3d<1>;
 pub type ChunkPos = Pos3d<CHUNK_S1>;
 pub type ChunkedPos = (usize, usize, usize);
+
+impl Display for BlockPos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            "BlockPos({}, {}, {}, {:?})",
+            self.x, self.y, self.z, self.realm
+        )
+    }
+}
+
+impl Display for ChunkPos {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            "ChunkPos({}, {}, {}, {:?})",
+            self.x, self.y, self.z, self.realm
+        )
+    }
+}
 
 impl BlockPos {
     pub fn from_unpadded(block_pos: BlockPos) -> (ChunkPos, ChunkedPos) {

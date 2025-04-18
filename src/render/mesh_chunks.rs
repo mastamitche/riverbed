@@ -15,7 +15,7 @@ use bevy::{
 use binary_greedy_meshing as bgm;
 
 use super::texture_array::TextureMapTrait;
-use crate::world::{linearize, CHUNKP_S1, CHUNK_S1};
+use crate::world::{linearize, ChunkPos, CHUNKP_S1, CHUNK_S1};
 use crate::{
     block::Face,
     world::{pad_linearize, Chunk, CHUNKP_S3},
@@ -121,76 +121,53 @@ impl Chunk {
         meshes
     }
 
-    pub fn create_ao_texture_data(&self) -> Image {
-        // Calculate dimensions
-        // let dim = CHUNKP_S1;
-        // let u32s_per_row = dim.div_ceil(32); // Round up division
-
-        // // Create empty texture data
-        // let mut texture_data = vec![0u32; u32s_per_row * dim * dim];
-
-        // let voxels = self.data.unpack_u16();
-        // // Fill texture data based on block presence (non-air blocks)
-        // for y in 0..dim {
-        //     for z in 0..dim {
-        //         for x in 0..dim {
-        //             // Get block and check if it's not air
-        //             let block = self.palette[voxels[linearize(x, y, z)] as usize];
-        //             if block != Block::Air {
-        //                 // Calculate bit position within the u32
-        //                 let bit_position = x % 32;
-        //                 let u32_index = (x / 32) + z * u32s_per_row + y * u32s_per_row * dim;
-
-        //                 // Set the bit
-        //                 texture_data[u32_index] |= 1u32 << bit_position;
-        //             }
-        //         }
-        //     }
-        // }
-
-        // // Convert u32 data to bytes
-        // let bytes: Vec<u8> = texture_data
-        //     .iter()
-        //     .flat_map(|&value| value.to_le_bytes())
-        //     .collect();
-
-        // // Create the Bevy Image
-        // let width = u32s_per_row as u32;
-        // let height = dim as u32;
-        // let depth = dim as u32;
-
+    pub fn create_ao_texture_data(&self, chunk_pos: ChunkPos) -> Image {
         let dim = CHUNKP_S1;
         // Create empty texture data
-        let mut texture_data = vec![0u8; dim * dim * dim];
+        let mut texture_data = vec![0u8; CHUNKP_S3];
 
         let voxels = self.data.unpack_u16();
         // Fill texture data based on block presence (non-air blocks)
+        let mut max_x = 0;
+        let mut max_y = 0;
+        let mut max_z = 0;
+        let mut zero_x = 0;
+        let mut zero_y = 0;
+        let mut zero_z = 0;
+
         for y in 0..dim {
             for z in 0..dim {
                 for x in 0..dim {
-                    // Get block and check if it's not air
-                    let block = self.palette[voxels[linearize(x, y, z)] as usize];
-                    if block != Block::Air {
-                        // Calculate bit position within the u32
-                        let u32_index = linearize(x, y, z);
-
-                        // Set the bit
-                        texture_data[u32_index] = 1;
+                    let xyz = linearize(x, y, z);
+                    if x == 0 && voxels[xyz] != 0 {
+                        zero_x += 1;
                     }
+                    if y == 0 && voxels[xyz] != 0 {
+                        zero_y += 1;
+                    }
+                    if z == 0 && voxels[xyz] != 0 {
+                        zero_z += 1;
+                    }
+                    if x == dim - 1 && voxels[xyz] != 0 {
+                        max_x += 1;
+                    }
+                    if y == dim - 1 && voxels[xyz] != 0 {
+                        max_y += 1;
+                    }
+                    if z == dim - 1 && voxels[xyz] != 0 {
+                        max_z += 1;
+                    }
+
+                    texture_data[xyz] = if voxels[xyz] != 0 { 1 } else { 0 }
                 }
             }
         }
 
-        // Create the Bevy Image
-        let width = dim as u32;
-        let height = dim as u32;
-        let depth = dim as u32;
-
         Image::new(
             Extent3d {
-                width,
-                height,
-                depth_or_array_layers: depth,
+                width: dim as u32,
+                height: dim as u32,
+                depth_or_array_layers: dim as u32,
             },
             TextureDimension::D3,
             texture_data,

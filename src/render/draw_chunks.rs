@@ -104,7 +104,7 @@ fn chunk_aabb_gizmos(mut gizmos: Gizmos, load_area: Res<PlayerArea>) {
 }
 
 #[derive(Resource)]
-pub struct MeshReciever(Receiver<(Option<Mesh>, ChunkPos, Image, Face, LOD)>);
+pub struct MeshReciever(Receiver<(Option<Mesh>, ChunkPos, Face, LOD)>);
 
 fn setup_mesh_thread(
     mut commands: Commands,
@@ -128,15 +128,18 @@ fn setup_mesh_thread(
                 };
                 //println!("meshing chunk {:?} with dist {}", chunk_pos, dist);
                 let lod = choose_lod_level(dist);
-                let Some(chunk) = chunks.get(&chunk_pos) else {
+                if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
+                    println!("meshing chunk {:?} with dist {}", chunk_pos, dist);
+                }
+                let Some(mut chunk) = chunks.get_mut(&chunk_pos) else {
                     continue;
                 };
                 let face_meshes = chunk.create_face_meshes(&*texture_map, lod);
-                let image = chunk.create_ao_texture_data();
+                chunk.changed = false;
                 for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                     let face = i.into();
                     if mesh_sender
-                        .send((face_mesh, chunk_pos, image.clone(), face, LOD(lod)))
+                        .send((face_mesh, chunk_pos, face, LOD(lod)))
                         .is_err()
                     {
                         println!("mesh for {:?} couldn't be sent", chunk_pos)
@@ -153,7 +156,11 @@ pub fn pull_meshes(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>>,
     mut chunk_ents: ResMut<ChunkEntities>,
-    mut mesh_query: Query<(&mut Mesh3d, &mut LOD)>,
+    mut mesh_query: Query<(
+        &mut Mesh3d,
+        &mut MeshMaterial3d<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>,
+        &mut LOD,
+    )>,
     mut meshes: ResMut<Assets<Mesh>>,
     block_tex_array: Res<BlockTextureArray>,
     load_area: Res<PlayerArea>,
@@ -162,12 +169,12 @@ pub fn pull_meshes(
     let received_meshes: Vec<_> = mesh_reciever
         .0
         .try_iter()
-        .filter(|(_, chunk_pos, _, _, _)| load_area.col_dists.contains_key(&(*chunk_pos).into()))
+        .filter(|(_, chunk_pos, _, _)| load_area.col_dists.contains_key(&(*chunk_pos).into()))
         .collect();
-    for (mesh_opt, chunk_pos, image, face, lod) in received_meshes
+    for (mesh_opt, chunk_pos, face, lod) in received_meshes
         .into_iter()
         .rev()
-        .unique_by(|(_, pos, _, face, _)| (*pos, *face))
+        .unique_by(|(_, pos, face, _)| (*pos, *face))
     {
         let Some(mesh) = mesh_opt else {
             if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
@@ -178,7 +185,24 @@ pub fn pull_meshes(
         //println!("Mesh available");
         let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
         if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
-            if let Ok((mut handle, mut old_lod)) = mesh_query.get_mut(*ent) {
+            if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
+                if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
+                    println!("updating chunk {:?}", chunk_pos);
+                }
+                let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
+                let image = chunk.create_ao_texture_data(chunk_pos);
+                let ao_image_handle = images.add(image);
+                chunk.ao_image = Some(ao_image_handle.clone());
+                chunk.meshing = false;
+                let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
+                let base = ref_mat.base.clone();
+                let new_material = materials.add(ExtendedMaterial {
+                    base: StandardMaterial { ..base },
+                    extension: ArrayTextureMaterial {
+                        ao_data: chunk.ao_image.clone().unwrap(),
+                    },
+                });
+                mat.0 = new_material;
                 handle.0 = meshes.add(mesh);
                 *old_lod = lod;
             } else {
@@ -186,14 +210,23 @@ pub fn pull_meshes(
                 println!("entity wasn't ready to recieve updated mesh");
             }
         } else if blocks.chunks.contains_key(&chunk_pos) {
-            let ao_image_handle = images.add(image);
+            let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
+            if chunk.ao_image.is_none() {
+                let image = chunk.create_ao_texture_data(chunk_pos);
+                let ao_image_handle = images.add(image);
+                chunk.ao_image = Some(ao_image_handle.clone());
+                chunk.meshing = false;
+            }
+            if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
+                println!("sending chunk {:?}", chunk_pos);
+            }
             let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
             let base = ref_mat.base.clone();
             // Create a new material instance for this chunk
             let new_material = materials.add(ExtendedMaterial {
                 base: StandardMaterial { ..base },
                 extension: ArrayTextureMaterial {
-                    ao_data: ao_image_handle,
+                    ao_data: chunk.ao_image.clone().unwrap(),
                 },
             });
             let ent = commands

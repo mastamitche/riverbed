@@ -28,6 +28,9 @@ impl Chunk {
 
     pub fn set_no_padding(&mut self, (x, y, z): ChunkedPos, block: Block) {
         let idx = linearize(x, y, z);
+        // if idx < 100 {
+        //     println!("setting idx {} to {}", idx, self.palette.index(block));
+        // }
         self.data.set(idx, self.palette.index(block));
     }
     pub fn set(&mut self, (x, y, z): ChunkedPos, block: Block) {

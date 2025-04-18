@@ -48,7 +48,7 @@ impl PlayerArea {
         chunks
             .iter()
             .filter_map(|entry| {
-                if entry.value().changed && entry.value().loaded {
+                if entry.value().changed && entry.value().loaded && !entry.value().meshing {
                     Some(*entry.key())
                 } else {
                     None
@@ -69,7 +69,7 @@ impl PlayerArea {
             println!("couldn't get_mut chunk {:?}", res);
             return None;
         };
-        chunk.changed = false;
+        chunk.meshing = true;
         Some((
             res,
             res.x

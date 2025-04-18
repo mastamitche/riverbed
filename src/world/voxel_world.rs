@@ -2,8 +2,12 @@ use super::{
     chunked, pos2d::chunks_in_col, BlockPos, BlockPos2d, Chunk, ChunkPos, ChunkedPos, ColPos,
     ColedPos, Realm, CHUNKP_S1, CHUNK_S1, CHUNK_S1I, MAX_HEIGHT, Y_CHUNKS,
 };
-use crate::Block;
-use bevy::prelude::{Resource, Vec3};
+use crate::{world::chunk, Block};
+use bevy::{
+    asset::Handle,
+    image::Image,
+    prelude::{Resource, Vec3},
+};
 use dashmap::DashMap;
 use std::{
     ops::{Deref, DerefMut},
@@ -12,7 +16,9 @@ use std::{
 
 pub struct TrackedChunk {
     chunk: Chunk,
+    pub ao_image: Option<Handle<Image>>,
     pub loaded: bool,
+    pub meshing: bool,
     pub changed: bool,
 }
 
@@ -20,8 +26,10 @@ impl TrackedChunk {
     pub fn new() -> Self {
         Self {
             chunk: Chunk::new(),
+            ao_image: None,
             loaded: false,
-            changed: false,
+            meshing: false,
+            changed: true,
         }
     }
 }
@@ -69,10 +77,17 @@ impl VoxelWorld {
 
     pub fn set_block(&self, pos: BlockPos, block: Block) {
         let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(pos);
-        self.chunks
-            .entry(chunk_pos)
-            .or_insert_with(|| TrackedChunk::new())
-            .set(chunked_pos, block);
+
+        // Try to get the chunk if it exists
+        if let Some(mut chunk) = self.chunks.get_mut(&chunk_pos) {
+            chunk.set(chunked_pos, block);
+        } else {
+            // If it doesn't exist, insert a new chunk with the block already set
+            let mut new_chunk = TrackedChunk::new();
+            new_chunk.set(chunked_pos, block);
+            self.chunks.insert(chunk_pos, new_chunk);
+        }
+
         self.mark_change(chunk_pos, chunked_pos, block);
     }
 
@@ -92,6 +107,7 @@ impl VoxelWorld {
     pub fn set_loaded(&self, chunk_pos: ChunkPos) -> bool {
         if let Some(mut chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.loaded = true;
+            chunk.changed = true;
             true
         } else {
             false // Chunk doesn't exist, so we can't mark it as loaded
@@ -106,6 +122,7 @@ impl VoxelWorld {
         height: usize,
         block: Block,
     ) {
+        //TODO: Logging if this is a border: log count of copy to neighbour
         // Convert column position and coordinates to base BlockPos
         let base_x = col_pos.x * CHUNK_S1I + x as i32;
         let base_z = col_pos.z * CHUNK_S1I + z as i32;
@@ -213,6 +230,8 @@ impl VoxelWorld {
     pub fn mark_change_single(&self, chunk_pos: ChunkPos) {
         if let Some(mut chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.changed = true;
+        } else {
+            println!("couldn't get_mut chunk {:?}", chunk_pos);
         }
     }
 
@@ -226,83 +245,177 @@ impl VoxelWorld {
         }
     }
     pub fn mark_change(&self, chunk_pos: ChunkPos, chunked_pos: ChunkedPos, block: Block) {
-        self.mark_change_single(chunk_pos);
-
         // Get border signs for each dimension
         let border_sign_x = VoxelWorld::border_sign(chunked_pos.0);
         let border_sign_y = VoxelWorld::border_sign(chunked_pos.1);
         let border_sign_z = VoxelWorld::border_sign(chunked_pos.2);
-
-        // Skip if we're not at any border
+        // Mark the current chunk as changed
+        self.mark_change_single(chunk_pos);
+        let chunked_64_space = (chunked_pos.0 + 1, chunked_pos.1 + 1, chunked_pos.2 + 1);
+        // Only proceed if we're at a border in at least one dimension
         if border_sign_x == 0 && border_sign_y == 0 && border_sign_z == 0 {
             return;
         }
+        // if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
+        //     println!(
+        //         "Adding Neighbour at chunkedpos {:?} at Chunked pos {:?} ",
+        //         chunk_pos, chunked_pos
+        //     );
+        // }
 
-        // For each possible combination of neighbors (up to 26)
-        for &dx in &[border_sign_x, 0] {
-            // Skip the 0 case if we're not at an x border
-            if dx == 0 && border_sign_x == 0 {
-                continue;
-            }
+        // X-axis neighbors (if we're at an x-border)
+        if border_sign_x != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x + border_sign_x,
+                y: chunk_pos.y,
+                z: chunk_pos.z,
+                realm: chunk_pos.realm,
+            };
 
-            for &dy in &[border_sign_y, 0] {
-                // Skip the 0 case if we're not at a y border
-                if dy == 0 && border_sign_y == 0 {
-                    continue;
-                }
+            let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
+            // Make sure y and z are within the valid 62³ space (0 to CHUNK_S1-1)
+            let neighbor_y = chunked_64_space.1;
+            let neighbor_z = chunked_64_space.2;
+            let neighbor_chunked_pos = (neighbor_x, neighbor_y, neighbor_z);
+            // println!(
+            //     "Updting x neighbor {:?} from {:?}, {:?}",
+            //     neighbor_chunk_pos, chunk_pos, neighbor_chunked_pos
+            // );
 
-                for &dz in &[border_sign_z, 0] {
-                    // Skip the 0 case if we're not at a z border
-                    if dz == 0 && border_sign_z == 0 {
-                        continue;
-                    }
-
-                    // Skip the original chunk
-                    if dx == 0 && dy == 0 && dz == 0 {
-                        continue;
-                    }
-
-                    // Calculate neighbor chunk position
-                    let mut neighbor_chunk_pos = chunk_pos;
-                    neighbor_chunk_pos.x += dx;
-                    neighbor_chunk_pos.y += dy;
-                    neighbor_chunk_pos.z += dz;
-
-                    // Calculate neighbor chunked position
-                    let neighbor_x = if dx < 0 {
-                        CHUNKP_S1 - 1
-                    } else if dx > 0 {
-                        0
-                    } else {
-                        chunked_pos.0
-                    };
-                    let neighbor_y = if dy < 0 {
-                        CHUNKP_S1 - 1
-                    } else if dy > 0 {
-                        0
-                    } else {
-                        chunked_pos.1
-                    };
-                    let neighbor_z = if dz < 0 {
-                        CHUNKP_S1 - 1
-                    } else if dz > 0 {
-                        0
-                    } else {
-                        chunked_pos.2
-                    };
-
-                    let neighbor_chunked_pos = (neighbor_x, neighbor_y, neighbor_z);
-
-                    // Update the neighboring chunk
-                    self.chunks
-                        .entry(neighbor_chunk_pos)
-                        .or_insert_with(|| TrackedChunk::new())
-                        .set_no_padding(neighbor_chunked_pos, block);
-
-                    self.mark_change_single(neighbor_chunk_pos);
-                }
-            }
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
         }
+
+        // Y-axis neighbors (if we're at a y-border)
+        if border_sign_y != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x,
+                y: chunk_pos.y + border_sign_y,
+                z: chunk_pos.z,
+                realm: chunk_pos.realm,
+            };
+
+            let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
+            // Make sure x and z are within the valid 62³ space (0 to CHUNK_S1-1)
+            let neighbor_x = chunked_64_space.0;
+            let neighbor_z = chunked_64_space.2;
+            let neighbor_chunked_pos = (neighbor_x, neighbor_y, neighbor_z);
+
+            //println!("Updting y neighbor {}", border_sign_y);
+
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
+        }
+
+        // Z-axis neighbors (if we're at a z-border)
+        if border_sign_z != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x,
+                y: chunk_pos.y,
+                z: chunk_pos.z + border_sign_z,
+                realm: chunk_pos.realm,
+            };
+
+            let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
+            // Make sure x and y are within the valid 62³ space (0 to CHUNK_S1-1)
+            let neighbor_x = chunked_64_space.0;
+            let neighbor_y = chunked_64_space.1;
+            let neighbor_chunked_pos = (neighbor_x, neighbor_y, neighbor_z);
+
+            // println!(
+            //     "Updting z neighbor {:?} from {:?}, {:?}",
+            //     neighbor_chunk_pos, chunk_pos, neighbor_chunked_pos
+            // );
+
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
+        }
+
+        // XY diagonal neighbors (if we're at both x and y borders)
+        if border_sign_x != 0 && border_sign_y != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x + border_sign_x,
+                y: chunk_pos.y + border_sign_y,
+                z: chunk_pos.z,
+                realm: chunk_pos.realm,
+            };
+
+            let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (neighbor_x, neighbor_y, chunked_64_space.2);
+
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
+        }
+
+        // XZ diagonal neighbors (if we're at both x and z borders)
+        if border_sign_x != 0 && border_sign_z != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x + border_sign_x,
+                y: chunk_pos.y,
+                z: chunk_pos.z + border_sign_z,
+                realm: chunk_pos.realm,
+            };
+
+            let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (neighbor_x, chunked_64_space.1, neighbor_z);
+
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
+        }
+
+        // YZ diagonal neighbors (if we're at both y and z borders)
+        if border_sign_y != 0 && border_sign_z != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x,
+                y: chunk_pos.y + border_sign_y,
+                z: chunk_pos.z + border_sign_z,
+                realm: chunk_pos.realm,
+            };
+
+            let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (chunked_64_space.0, neighbor_y, neighbor_z);
+
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
+        }
+
+        // XYZ diagonal neighbors (if we're at all three borders)
+        if border_sign_x != 0 && border_sign_y != 0 && border_sign_z != 0 {
+            let neighbor_chunk_pos = ChunkPos {
+                x: chunk_pos.x + border_sign_x,
+                y: chunk_pos.y + border_sign_y,
+                z: chunk_pos.z + border_sign_z,
+                realm: chunk_pos.realm,
+            };
+
+            let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
+            let neighbor_chunked_pos = (neighbor_x, neighbor_y, neighbor_z);
+
+            self.update_neighbor_chunk(neighbor_chunk_pos, neighbor_chunked_pos, block);
+        }
+    }
+
+    // Helper method to update a neighboring chunk
+    fn update_neighbor_chunk(
+        &self,
+        neighbor_chunk_pos: ChunkPos,
+        neighbor_chunked_pos: ChunkedPos,
+        block: Block,
+    ) {
+        // if neighbor_chunk_pos.x == 8 && neighbor_chunk_pos.y == 0 && neighbor_chunk_pos.z == 2 {
+        //     println!(
+        //         "Updating Neighbour at chunkedpos {:?} at Chunked pos {:?} ",
+        //         neighbor_chunk_pos, neighbor_chunked_pos
+        //     );
+        // }
+        if let Some(mut chunk) = self.chunks.get_mut(&neighbor_chunk_pos) {
+            chunk.set_no_padding(neighbor_chunked_pos, block);
+        } else {
+            let mut new_chunk = TrackedChunk::new();
+            new_chunk.set_no_padding(neighbor_chunked_pos, block);
+            self.chunks.insert(neighbor_chunk_pos, new_chunk);
+        }
+
+        self.mark_change_single(neighbor_chunk_pos);
     }
 
     pub fn raycast(
