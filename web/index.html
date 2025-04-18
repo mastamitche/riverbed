@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="title" content="BrickPong.io" />
+    <meta
+      name="description"
+      content="Brick Pong is a free 1v1 multiplayer game. A cross between pong and brick break games like breakout and DX Ball."
+    />
+    <meta
+      name="keywords"
+      content="Pong, Multiplayer, Brick Break, DX Ball, io, IO, Game, Video Game, Web, Mobile, PC"
+    />
+    <meta name="robots" content="index, follow" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="language" content="English" />
+
+    <title>Haven and Hollow</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        outline: none;
+        border: none;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+        border: none;
+      }
+    </style>
+  </head>
+  <body style="margin: 0px">
+    <script type="module">
+      import initSync from "./brick_pong.js";
+      initSync().catch((error) => {
+        if (
+          !error.message.startsWith(
+            "Using exceptions for control flow, don't mind me. This isn't actually an error!"
+          )
+        ) {
+          throw error;
+        }
+      });
+      console.log("Init done");
+    </script>
+  </body>
+</html>

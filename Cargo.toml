@@ -3,6 +3,8 @@ name = "riverbed"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "riverbed"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
 members = [
@@ -26,10 +28,7 @@ bevy = { version = "0.15.2" ,default-features = true, features = [
 bevy_dev_tools = "0.15.0"
 bevy_atmosphere = "*"
 binary-greedy-meshing = "*"
-confy = "*"
 leafwing-input-manager = "*"
-rand = "*"
-rand_chacha = "*"
 indexmap = "*"
 itertools = "*"
 vpsearch = "*"
@@ -47,11 +46,12 @@ array-macro = "*"
 packed-uints = "*"
 block-mesh = "*"
 lazy_static = "*"
-noise-algebra = "*"
 regex = "*"
 bytemuck ="*"
 json5 = "*"
-bevy_egui = "0.31"
+wgpu = "23.0.1"
+wasm-bindgen = { version = "0.2.93" }
+bevy_egui = {version="0.33", features = ["open_url", "default_fonts", "render"] }
 riverbed_closest = { path = "crates/riverbed_closest", version = "*" }
 
 [build-dependencies]
@@ -59,3 +59,24 @@ riverbed_block_def = { path = "crates/riverbed_block_def", version = "*" }
 
 [profile.dev]
 opt-level = 1
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-timer = { version = "0.2" }
+wasm-bindgen = { version = "0.2.93" }
+web-sys = { version = "0.3" }
+console_error_panic_hook = { version = "0.1" }
+tracing-wasm = { version = "0.2" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+release = []
+web = []
+testing = []
+
+
+#Run commands
+# if referencing this in another project you need the .cargo/config.toml to work
+#$env:RUST_BACKTRACE="1"; cargo watch -x "run --target wasm32-unknown-unknown"
+#$env:RUST_BACKTRACE="1"; cargo watch -x "run"

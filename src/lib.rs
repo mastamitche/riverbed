@@ -3,6 +3,8 @@
 #![feature(const_trait_impl)]
 #![feature(f16)]
 
+use wasm_bindgen::prelude::*;
+
 mod agents;
 mod asset_processing;
 mod block;
@@ -15,11 +17,9 @@ mod ui;
 mod world;
 
 use setup::*;
-use wasm_bindgen::prelude::wasm_bindgen;
-pub fn main() {
-    create_app();
-}
+
 #[wasm_bindgen]
 pub fn setup() {
-    main();
+    println!("setup");
+    create_app();
 }

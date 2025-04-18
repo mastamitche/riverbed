@@ -15,7 +15,7 @@ pub struct Pos3d<const U: usize> {
     pub realm: Realm,
 }
 
-const K: usize = 0x517cc1b727220a95;
+const K: usize = 0x9E3779B9;
 
 impl<const U: usize> Pos3d<U> {
     pub fn dist(&self, other: Pos3d<U>) -> i32 {

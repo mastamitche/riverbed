@@ -4,19 +4,13 @@ use crate::world::{
 };
 use crate::{gen::Soils, Block};
 use bevy::prelude::info_span;
-use itertools::iproduct;
-use noise_algebra::NoiseSource;
 use riverbed_closest::{ranges, ClosestTrait};
 use std::{collections::HashMap, ops::RangeInclusive};
 
-use super::tree::Trees;
 pub const CONT_R: f32 = (WATER_H + 2) as f32 / MAX_GEN_HEIGHT as f32;
 pub const CONT_COMPL: f32 = 1. - CONT_R;
 
 pub struct Earth {
-    soils: Soils,
-    trees: Trees,
-    seed: i32,
     config: HashMap<String, f32>,
 }
 
@@ -27,13 +21,8 @@ fn pos_to_range(pos: ColPos) -> [RangeInclusive<i32>; 2] {
 }
 
 impl Earth {
-    pub fn new(seed: u32, config: HashMap<String, f32>) -> Self {
-        Earth {
-            soils: ranges::from_csv("assets/gen/soils_condition.csv").unwrap(),
-            trees: ranges::from_csv("assets/gen/trees_condition.csv").unwrap(),
-            seed: seed as i32,
-            config,
-        }
+    pub fn new(config: HashMap<String, f32>) -> Self {
+        Earth { config }
     }
     pub fn gen(&self, world: &VoxelWorld, col: ColPos) {
         let fill_span = info_span!("chunk filling", name = "chunk filling").entered();

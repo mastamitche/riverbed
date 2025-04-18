@@ -28,7 +28,7 @@ pub struct PlayerSpawn;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(confy::load_path::<KeyBinds>("key_bindings.toml").unwrap())
+        app.insert_resource(KeyBinds::default())
             .add_plugins(BlockActionPlugin)
             .add_plugins(InputManagerPlugin::<Dir>::default())
             .add_plugins(InputManagerPlugin::<Action>::default())
@@ -84,7 +84,7 @@ pub enum DevCommand {
 pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
     let realm = Realm::Overworld;
     // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
-    let rd = RenderDistance(6);
+    let rd = RenderDistance(16);
     commands
         .spawn((
             Transform {
