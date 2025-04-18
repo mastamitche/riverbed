@@ -156,30 +156,6 @@ fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
     }
 }
 
-fn check_voxel_presence(pos: vec3<i32>) -> bool {
-    var calc_pos = vec3<i32>(pos.z, pos.x, pos.y);
-    calc_pos = calc_pos + vec3<i32>(1, 1, 1);
-    
-    // Calculate which u32 contains our bit (index / 32)
-    let bit_index = calc_pos.x + calc_pos.y * CHUNK_SIZE_FULL + calc_pos.z * CHUNK_SIZE_FULL * CHUNK_SIZE_FULL;
-    let u32_index = bit_index / 32;
-    
-    // Calculate which bit within that u32 (index % 32)
-    let bit_position = bit_index % 32;
-    
-    // Calculate the texture coordinates to access the correct u32
-    let chunk_size_packed = (CHUNK_SIZE_FULL + 31) / 32;
-    let texture_x = u32_index % chunk_size_packed;
-    let texture_y = (u32_index / chunk_size_packed) % CHUNK_SIZE_FULL;
-    let texture_z = u32_index / (chunk_size_packed * CHUNK_SIZE_FULL);
-    
-    // Load the u32 value from the texture
-    let packed_value = textureLoad(ao_texture_data, vec3<i32>(texture_x, texture_y, texture_z), 0).r;
-    
-    // Extract the correct bit
-    let mask = 1u << u32(bit_position);
-    return (packed_value & mask) != 0u;
-}
 fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     var count = 0;
     
@@ -263,6 +239,32 @@ fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
 
     return count;
 }
+
+
+fn check_voxel_presence(pos: vec3<i32>) -> bool {
+    var calc_pos = vec3<i32>(pos.z, pos.x, pos.y);
+    calc_pos = calc_pos + vec3<i32>(1, 1, 1);
+    
+    // Calculate which u32 contains our bit (index / 32)
+    let bit_index = calc_pos.x + calc_pos.y * CHUNK_SIZE_FULL + calc_pos.z * CHUNK_SIZE_FULL * CHUNK_SIZE_FULL;
+    let u32_index = bit_index / 32;
+    
+    // Calculate which bit within that u32 (index % 32)
+    let bit_position = bit_index % 32;
+    
+    // Calculate the texture coordinates to access the correct u32
+    let chunk_size_packed = (CHUNK_SIZE_FULL + 31) / 32;
+    let texture_x = u32_index % chunk_size_packed;
+    let texture_y = (u32_index / chunk_size_packed) % CHUNK_SIZE_FULL;
+    let texture_z = u32_index / (chunk_size_packed * CHUNK_SIZE_FULL);
+    
+    // Load the u32 value from the texture
+    let packed_value = textureLoad(ao_texture_data, vec3<i32>(texture_x, texture_y, texture_z), 0).r;
+    
+    // Extract the correct bit
+    let mask = 1u << u32(bit_position);
+    return (packed_value & mask) != 0u;
+}
 fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
     var voxel_x = i32(floor(world_pos.x - (f32(normal.x)/2.0)));
     var voxel_y = i32(floor(world_pos.y - (f32(normal.y)/2.0)));
@@ -297,7 +299,7 @@ fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
     
     // Check for corner neighbors and calculate AO value
     var ao_value: f32 = 1.0;
-    
+        
     if (normal.x != 0) {
         let side = normal.x;
         let top = check_voxel_presence(chunk_pos + vec3<i32>(side, 1, 0));
@@ -337,9 +339,7 @@ fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
         let horizontal_ao = mix(back_ao, front_ao, z_weight);
         
         ao_value = 1.0 - (vertical_ao + horizontal_ao);
-        
     } else if (normal.y != 0) {
-        // Similar logic for Y-facing faces
         let side = normal.y;
         let right = check_voxel_presence(chunk_pos + vec3<i32>(1, side, 0));
         let left = check_voxel_presence(chunk_pos + vec3<i32>(-1, side, 0));
@@ -374,7 +374,6 @@ fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
         let depth_ao = mix(back_ao, front_ao, z_weight);
         
         ao_value = 1.0 - (horizontal_ao + depth_ao);
-        
     } else {
         // Z-axis face (front/back)
         let side = normal.z;
