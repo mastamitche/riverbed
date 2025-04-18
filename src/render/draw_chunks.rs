@@ -126,11 +126,7 @@ fn setup_mesh_thread(
                     yield_now();
                     continue;
                 };
-                //println!("meshing chunk {:?} with dist {}", chunk_pos, dist);
                 let lod = choose_lod_level(dist);
-                if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
-                    println!("meshing chunk {:?} with dist {}", chunk_pos, dist);
-                }
                 let Some(mut chunk) = chunks.get_mut(&chunk_pos) else {
                     continue;
                 };
@@ -186,9 +182,6 @@ pub fn pull_meshes(
         let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
         if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
             if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
-                if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
-                    println!("updating chunk {:?}", chunk_pos);
-                }
                 let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
                 let image = chunk.create_ao_texture_data(chunk_pos);
                 let ao_image_handle = images.add(image);
@@ -217,9 +210,7 @@ pub fn pull_meshes(
                 chunk.ao_image = Some(ao_image_handle.clone());
                 chunk.meshing = false;
             }
-            if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
-                println!("sending chunk {:?}", chunk_pos);
-            }
+
             let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
             let base = ref_mat.base.clone();
             // Create a new material instance for this chunk

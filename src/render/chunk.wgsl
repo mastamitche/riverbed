@@ -141,11 +141,8 @@ fn color_from_id(id: u32) -> vec4<f32> {
 fn check_voxel_presence(pos: vec3<i32>) -> bool {
     var calc_pos = vec3<i32>(pos.z , pos.x, pos.y);
     calc_pos = calc_pos + vec3<i32>(1,1,1);
-    // Load the value for this position
-    // In R8Uint format, each texel is a single byte (0 or 1)
     let value = textureLoad(ao_texture_data, calc_pos, 0).r;
     
-    // Check if the value is non-zero (meaning a block is present)
     return value != 0u;
 }
 
@@ -246,6 +243,159 @@ fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
     }
 
     return count;
+}
+fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
+    var voxel_x = i32(floor(world_pos.x - (f32(normal.x)/2.0)));
+    var voxel_y = i32(floor(world_pos.y - (f32(normal.y)/2.0)));
+    var voxel_z = i32(floor(world_pos.z - (f32(normal.z)/2.0)));
+    
+    let chunk_x = positive_modulo(voxel_x, CHUNK_SIZE);
+    let chunk_y = positive_modulo(voxel_y, CHUNK_SIZE);
+    let chunk_z = positive_modulo(voxel_z, CHUNK_SIZE);
+
+    var chunk_pos = vec3<i32>(chunk_x, chunk_y, chunk_z);
+    
+    // Calculate the fractional part of the position (where in the block the point is)
+    let fract_pos = vec3<f32>(
+        world_pos.x - floor(world_pos.x),
+        world_pos.y - floor(world_pos.y),
+        world_pos.z - floor(world_pos.z)
+    );
+    
+    // Calculate weights based on position within the block
+    var weights: vec3<f32>;
+    
+    if (normal.x != 0) {
+        // For X-facing faces, use y and z fractional parts
+        weights = vec3<f32>(0.0, fract_pos.y, fract_pos.z);
+    } else if (normal.y != 0) {
+        // For Y-facing faces, use x and z fractional parts
+        weights = vec3<f32>(fract_pos.x, 0.0, fract_pos.z);
+    } else {
+        // For Z-facing faces, use x and y fractional parts
+        weights = vec3<f32>(fract_pos.x, fract_pos.y, 0.0);
+    }
+    
+    // Check for corner neighbors and calculate AO value
+    var ao_value: f32 = 1.0;
+    
+    if (normal.x != 0) {
+        let side = normal.x;
+        let top = check_voxel_presence(chunk_pos + vec3<i32>(side, 1, 0));
+        let bottom = check_voxel_presence(chunk_pos + vec3<i32>(side, -1, 0));
+        let front = check_voxel_presence(chunk_pos + vec3<i32>(side, 0, 1));
+        let back = check_voxel_presence(chunk_pos + vec3<i32>(side, 0, -1));
+        
+        // Check corners
+        let top_front = check_voxel_presence(chunk_pos + vec3<i32>(side, 1, 1));
+        let top_back = check_voxel_presence(chunk_pos + vec3<i32>(side, 1, -1));
+        let bottom_front = check_voxel_presence(chunk_pos + vec3<i32>(side, -1, 1));
+        let bottom_back = check_voxel_presence(chunk_pos + vec3<i32>(side, -1, -1));
+        
+        // Calculate AO based on position within face
+        let top_factor = mix(0.0, 0.25, f32(top));
+        let bottom_factor = mix(0.0, 0.25, f32(bottom));
+        let front_factor = mix(0.0, 0.25, f32(front));
+        let back_factor = mix(0.0, 0.25, f32(back));
+        
+        // Corner factors have less weight
+        let top_front_factor = mix(0.0, 0.125, f32(top_front && !(top && front)));
+        let top_back_factor = mix(0.0, 0.125, f32(top_back && !(top && back)));
+        let bottom_front_factor = mix(0.0, 0.125, f32(bottom_front && !(bottom && front)));
+        let bottom_back_factor = mix(0.0, 0.125, f32(bottom_back && !(bottom && back)));
+        
+        // Calculate weighted AO value based on position within the face
+        let y_weight = weights.y;
+        let z_weight = weights.z;
+        
+        // Apply weights to get smooth AO across the face
+        let top_ao = mix(top_back_factor, top_front_factor, z_weight) + top_factor;
+        let bottom_ao = mix(bottom_back_factor, bottom_front_factor, z_weight) + bottom_factor;
+        let vertical_ao = mix(bottom_ao, top_ao, y_weight);
+        
+        let front_ao = front_factor;
+        let back_ao = back_factor;
+        let horizontal_ao = mix(back_ao, front_ao, z_weight);
+        
+        ao_value = 1.0 - (vertical_ao + horizontal_ao);
+        
+    } else if (normal.y != 0) {
+        // Similar logic for Y-facing faces
+        let side = normal.y;
+        let right = check_voxel_presence(chunk_pos + vec3<i32>(1, side, 0));
+        let left = check_voxel_presence(chunk_pos + vec3<i32>(-1, side, 0));
+        let front = check_voxel_presence(chunk_pos + vec3<i32>(0, side, 1));
+        let back = check_voxel_presence(chunk_pos + vec3<i32>(0, side, -1));
+        
+        // Check corners
+        let right_front = check_voxel_presence(chunk_pos + vec3<i32>(1, side, 1));
+        let right_back = check_voxel_presence(chunk_pos + vec3<i32>(1, side, -1));
+        let left_front = check_voxel_presence(chunk_pos + vec3<i32>(-1, side, 1));
+        let left_back = check_voxel_presence(chunk_pos + vec3<i32>(-1, side, -1));
+        
+        let right_factor = mix(0.0, 0.25, f32(right));
+        let left_factor = mix(0.0, 0.25, f32(left));
+        let front_factor = mix(0.0, 0.25, f32(front));
+        let back_factor = mix(0.0, 0.25, f32(back));
+        
+        let right_front_factor = mix(0.0, 0.125, f32(right_front && !(right && front)));
+        let right_back_factor = mix(0.0, 0.125, f32(right_back && !(right && back)));
+        let left_front_factor = mix(0.0, 0.125, f32(left_front && !(left && front)));
+        let left_back_factor = mix(0.0, 0.125, f32(left_back && !(left && back)));
+        
+        let x_weight = weights.x;
+        let z_weight = weights.z;
+        
+        let right_ao = mix(right_back_factor, right_front_factor, z_weight) + right_factor;
+        let left_ao = mix(left_back_factor, left_front_factor, z_weight) + left_factor;
+        let horizontal_ao = mix(left_ao, right_ao, x_weight);
+        
+        let front_ao = front_factor;
+        let back_ao = back_factor;
+        let depth_ao = mix(back_ao, front_ao, z_weight);
+        
+        ao_value = 1.0 - (horizontal_ao + depth_ao);
+        
+    } else {
+        // Z-axis face (front/back)
+        let side = normal.z;
+        let right = check_voxel_presence(chunk_pos + vec3<i32>(1, 0, side));
+        let left = check_voxel_presence(chunk_pos + vec3<i32>(-1, 0, side));
+        let top = check_voxel_presence(chunk_pos + vec3<i32>(0, 1, side));
+        let bottom = check_voxel_presence(chunk_pos + vec3<i32>(0, -1, side));
+        
+        // Check corners
+        let top_right = check_voxel_presence(chunk_pos + vec3<i32>(1, 1, side));
+        let top_left = check_voxel_presence(chunk_pos + vec3<i32>(-1, 1, side));
+        let bottom_right = check_voxel_presence(chunk_pos + vec3<i32>(1, -1, side));
+        let bottom_left = check_voxel_presence(chunk_pos + vec3<i32>(-1, -1, side));
+        
+        let right_factor = mix(0.0, 0.25, f32(right));
+        let left_factor = mix(0.0, 0.25, f32(left));
+        let top_factor = mix(0.0, 0.25, f32(top));
+        let bottom_factor = mix(0.0, 0.25, f32(bottom));
+        
+        let top_right_factor = mix(0.0, 0.125, f32(top_right && !(top && right)));
+        let top_left_factor = mix(0.0, 0.125, f32(top_left && !(top && left)));
+        let bottom_right_factor = mix(0.0, 0.125, f32(bottom_right && !(bottom && right)));
+        let bottom_left_factor = mix(0.0, 0.125, f32(bottom_left && !(bottom && left)));
+        
+        let x_weight = weights.x;
+        let y_weight = weights.y;
+        
+        let top_ao = mix(top_left_factor, top_right_factor, x_weight) + top_factor;
+        let bottom_ao = mix(bottom_left_factor, bottom_right_factor, x_weight) + bottom_factor;
+        let vertical_ao = mix(bottom_ao, top_ao, y_weight);
+        
+        let right_ao = right_factor;
+        let left_ao = left_factor;
+        let horizontal_ao = mix(left_ao, right_ao, x_weight);
+        
+        ao_value = 1.0 - (vertical_ao + horizontal_ao);
+    }
+    
+    // Clamp to ensure valid range
+    return clamp(ao_value, 0.3, 1.0);
 }
 
 @vertex
@@ -353,19 +503,13 @@ fn fragment(
 
     // // // apply in-shader post processing
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-    //out.color = voxel_color;
-#endif
-    // if (local_pos.x == CHUNK_SIZE_M_1 || local_pos.y == CHUNK_SIZE_M_1 || local_pos.z == CHUNK_SIZE_M_1) {
-    //     return out;
-    // }
-    // if (local_pos.x == 0 || local_pos.y == 0  || local_pos.z == 0 ) {
-    //     return out;
-    // }
     
+#endif
+
     let neighbor_count = count_ao_neighbors(in.world_position.xyz, in.face_normal);
     let debug_color = get_debug_color(neighbor_count);
-    
-    out.color = vec4<f32>(debug_color, 1.0);
+    let ao = calc_ao(in.world_position.xyz, in.face_normal);
+    out.color = vec4<f32>(out.color.r*ao,out.color.g*ao,out.color.b*ao, 1.0);
 
     return out;
 }
