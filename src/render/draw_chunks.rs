@@ -12,7 +12,6 @@ use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 use bevy::render::view::NoFrustumCulling;
 use bevy::tasks::AsyncComputeTaskPool;
-use crossbeam::channel::{unbounded, Receiver};
 use itertools::{iproduct, Itertools};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,39 +24,6 @@ pub struct LOD(pub usize);
 
 fn choose_lod_level(chunk_dist: u32) -> usize {
     1
-}
-
-fn mark_lod_remesh(
-    load_area: Res<PlayerArea>,
-    chunk_ents: ResMut<ChunkEntities>,
-    lods: Query<&LOD>,
-    blocks: ResMut<VoxelWorld>,
-) {
-    // FIXME: this only remesh chunks that previously had a mesh
-    // However in some rare cases a chunk with some blocs can produce an empty mesh at certain LODs
-    // and never get remeshed even though it should
-    if !load_area.is_changed() {
-        return;
-    }
-    for ((chunk_pos, _), entity) in chunk_ents
-        .0
-        .iter()
-        .unique_by(|((chunk_pos, _), _)| chunk_pos)
-    {
-        let Some(dist) = load_area.col_dists.get(&(*chunk_pos).into()) else {
-            continue;
-        };
-        let new_lod = choose_lod_level(*dist);
-        let Ok(old_lod) = lods.get(*entity) else {
-            continue;
-        };
-        if new_lod != old_lod.0 {
-            let Some(mut chunk) = blocks.chunks.get_mut(chunk_pos) else {
-                continue;
-            };
-            chunk.changed = true;
-        }
-    }
 }
 
 fn chunk_aabb_gizmos(mut gizmos: Gizmos, load_area: Res<PlayerArea>) {
@@ -103,52 +69,30 @@ fn chunk_aabb_gizmos(mut gizmos: Gizmos, load_area: Res<PlayerArea>) {
     }
 }
 
-#[derive(Resource)]
-pub struct MeshReciever(Receiver<(Option<Mesh>, ChunkPos, Face, LOD)>);
-
-fn setup_mesh_thread(
-    mut commands: Commands,
-    blocks: Res<VoxelWorld>,
-    shared_load_area: Res<SharedLoadArea>,
-    texture_map: Res<TextureMap>,
-) {
-    let thread_pool = AsyncComputeTaskPool::get();
-    let chunks = Arc::clone(&blocks.chunks);
-    let (mesh_sender, mesh_reciever) = unbounded();
-    commands.insert_resource(MeshReciever(mesh_reciever));
-    let shared_load_area = Arc::clone(&shared_load_area.0);
-    let texture_map = Arc::clone(&texture_map.0);
-    thread_pool
-        .spawn(async move {
-            loop {
-                let Some((chunk_pos, dist)) = shared_load_area.read().pop_closest_change(&chunks)
-                else {
-                    yield_now();
-                    continue;
-                };
-                let lod = choose_lod_level(dist);
-                let Some(mut chunk) = chunks.get_mut(&chunk_pos) else {
-                    continue;
-                };
-                let face_meshes = chunk.create_face_meshes(&*texture_map, lod);
-                chunk.changed = false;
-                for (i, face_mesh) in face_meshes.into_iter().enumerate() {
-                    let face = i.into();
-                    if mesh_sender
-                        .send((face_mesh, chunk_pos, face, LOD(lod)))
-                        .is_err()
-                    {
-                        println!("mesh for {:?} couldn't be sent", chunk_pos)
-                    };
-                }
-            }
-        })
-        .detach();
+#[derive(Resource, Default)]
+pub struct MeshGenerationQueue {
+    queue: Vec<(ChunkPos, u32)>,
+    in_progress: Option<(ChunkPos, u32)>,
 }
 
-pub fn pull_meshes(
+pub fn queue_mesh_generation(
+    mut mesh_queue: ResMut<MeshGenerationQueue>,
+    shared_load_area: Res<SharedLoadArea>,
+    blocks: Res<VoxelWorld>,
+) {
+    if mesh_queue.in_progress.is_none() {
+        if let Some(shared_area) = shared_load_area.0.try_read() {
+            if let Some((chunk_pos, dist)) = shared_area.pop_closest_change(&blocks.chunks) {
+                mesh_queue.queue.push((chunk_pos, dist));
+            }
+        }
+    }
+}
+
+pub fn process_mesh_queue(
+    mut mesh_queue: ResMut<MeshGenerationQueue>,
+    blocks: Res<VoxelWorld>,
     mut commands: Commands,
-    mesh_reciever: Res<MeshReciever>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>>,
     mut chunk_ents: ResMut<ChunkEntities>,
@@ -160,82 +104,96 @@ pub fn pull_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     block_tex_array: Res<BlockTextureArray>,
     load_area: Res<PlayerArea>,
-    blocks: Res<VoxelWorld>,
 ) {
-    let received_meshes: Vec<_> = mesh_reciever
-        .0
-        .try_iter()
-        .filter(|(_, chunk_pos, _, _)| load_area.col_dists.contains_key(&(*chunk_pos).into()))
-        .collect();
-    for (mesh_opt, chunk_pos, face, lod) in received_meshes
-        .into_iter()
-        .rev()
-        .unique_by(|(_, pos, face, _)| (*pos, *face))
-    {
-        let Some(mesh) = mesh_opt else {
-            if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
-                commands.entity(ent).despawn();
-            }
-            continue;
-        };
-        //println!("Mesh available");
-        let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
-        if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
-            if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
-                let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
-                let image = chunk.create_ao_texture_data();
-                let ao_image_handle = images.add(image);
-                chunk.ao_image = Some(ao_image_handle.clone());
-                chunk.meshing = false;
-                let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
-                let base = ref_mat.base.clone();
-                let new_material = materials.add(ExtendedMaterial {
-                    base: StandardMaterial { ..base },
-                    extension: ArrayTextureMaterial {
-                        ao_data: chunk.ao_image.clone().unwrap(),
-                    },
-                });
-                mat.0 = new_material;
-                handle.0 = meshes.add(mesh);
-                *old_lod = lod;
-            } else {
-                // the entity is not instanciated yet, we put it back
-                println!("entity wasn't ready to recieve updated mesh");
-            }
-        } else if blocks.chunks.contains_key(&chunk_pos) {
-            let mut chunk = blocks.chunks.get_mut(&chunk_pos).unwrap();
-            if chunk.ao_image.is_none() {
-                let image = chunk.create_ao_texture_data();
-                let ao_image_handle = images.add(image);
-                chunk.ao_image = Some(ao_image_handle.clone());
-                chunk.meshing = false;
-            }
-
-            let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
-            let base = ref_mat.base.clone();
-            // Create a new material instance for this chunk
-            let new_material = materials.add(ExtendedMaterial {
-                base: StandardMaterial { ..base },
-                extension: ArrayTextureMaterial {
-                    ao_data: chunk.ao_image.clone().unwrap(),
-                },
-            });
-            let ent = commands
-                .spawn((
-                    Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(new_material),
-                    Transform::from_translation(
-                        Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32)
-                            * CHUNK_S1 as f32,
-                    ),
-                    NoFrustumCulling,
-                    chunk_aabb,
-                    lod,
-                    face,
-                ))
-                .id();
-            chunk_ents.0.insert((chunk_pos, face), ent);
+    // Process current mesh if there is one
+    if let Some((chunk_pos, dist)) = mesh_queue.in_progress.take() {
+        // Skip if the chunk is no longer in the load area
+        if !load_area.col_dists.contains_key(&chunk_pos.into()) {
+            return;
         }
+
+        let lod = choose_lod_level(dist);
+        if let Some(mut chunk) = blocks.chunks.get_mut(&chunk_pos) {
+            let face_meshes = chunk.create_face_meshes();
+            chunk.changed = false;
+
+            for (i, face_mesh) in face_meshes.into_iter().enumerate() {
+                let face: Face = i.into();
+
+                if let Some(mesh) = face_mesh {
+                    let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
+
+                    // Check if entity already exists for this chunk face
+                    if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
+                        if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
+                            let image = chunk.create_ao_texture_data();
+                            let ao_image_handle = images.add(image);
+                            chunk.ao_image = Some(ao_image_handle.clone());
+                            chunk.meshing = false;
+
+                            let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
+                            let base = ref_mat.base.clone();
+                            let new_material = materials.add(ExtendedMaterial {
+                                base: StandardMaterial { ..base },
+                                extension: ArrayTextureMaterial {
+                                    ao_data: chunk.ao_image.clone().unwrap(),
+                                },
+                            });
+
+                            mat.0 = new_material;
+                            handle.0 = meshes.add(mesh);
+                            *old_lod = LOD(lod);
+                        }
+                    } else {
+                        // Create new entity if it doesn't exist
+                        if chunk.ao_image.is_none() {
+                            let image = chunk.create_ao_texture_data();
+                            let ao_image_handle = images.add(image);
+                            chunk.ao_image = Some(ao_image_handle.clone());
+                            chunk.meshing = false;
+                        }
+
+                        let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
+                        let base = ref_mat.base.clone();
+                        let new_material = materials.add(ExtendedMaterial {
+                            base: StandardMaterial { ..base },
+                            extension: ArrayTextureMaterial {
+                                ao_data: chunk.ao_image.clone().unwrap(),
+                            },
+                        });
+
+                        let ent = commands
+                            .spawn((
+                                Mesh3d(meshes.add(mesh)),
+                                MeshMaterial3d(new_material),
+                                Transform::from_translation(
+                                    Vec3::new(
+                                        chunk_pos.x as f32,
+                                        chunk_pos.y as f32,
+                                        chunk_pos.z as f32,
+                                    ) * CHUNK_S1 as f32,
+                                ),
+                                NoFrustumCulling,
+                                chunk_aabb,
+                                LOD(lod),
+                                face,
+                            ))
+                            .id();
+                        chunk_ents.0.insert((chunk_pos, face), ent);
+                    }
+                } else {
+                    // If there's no mesh for this face, remove any existing entity
+                    if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
+                        commands.entity(ent).despawn();
+                    }
+                }
+            }
+        }
+    }
+
+    // Get next mesh to process
+    if mesh_queue.in_progress.is_none() && !mesh_queue.queue.is_empty() {
+        mesh_queue.in_progress = mesh_queue.queue.pop();
     }
 }
 
@@ -274,21 +232,20 @@ pub struct Draw3d;
 impl Plugin for Draw3d {
     fn build(&self, app: &mut App) {
         app.add_plugins(TextureArrayPlugin)
+            .init_resource::<MeshGenerationQueue>()
             .insert_resource(ChunkEntities::new())
             .add_systems(
                 Startup,
                 (
                     setup_shared_load_area,
                     apply_deferred,
-                    setup_mesh_thread,
-                    apply_deferred,
+                    // apply_deferred,
                 )
                     .chain()
                     .after(LoadAreaAssigned),
             )
+            .add_systems(Update, (queue_mesh_generation, process_mesh_queue))
             .add_systems(Update, update_shared_load_area)
-            .add_systems(Update, mark_lod_remesh)
-            .add_systems(Update, pull_meshes)
             .add_systems(Update, on_col_unload)
             //.add_systems(Update, chunk_aabb_gizmos)
             .add_systems(PostUpdate, chunk_culling);

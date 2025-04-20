@@ -27,18 +27,18 @@ const SEED: u64 = 42;
 
 pub fn create_app() {
     let mut app = App::new();
-    #[cfg(not(feature = "web"))]
-    app.add_plugins(FpsOverlayPlugin {
-        config: FpsOverlayConfig {
-            text_config: TextFont {
-                font_size: 15.0,
-                font: default(),
-                font_smoothing: FontSmoothing::default(),
-            },
-            text_color: Color::WHITE,
-            enabled: true,
-        },
-    });
+    // #[cfg(not(feature = "web"))]
+    // app.add_plugins(FpsOverlayPlugin {
+    //     config: FpsOverlayConfig {
+    //         text_config: TextFont {
+    //             font_size: 15.0,
+    //             font: default(),
+    //             font_smoothing: FontSmoothing::default(),
+    //         },
+    //         text_color: Color::WHITE,
+    //         enabled: true,
+    //     },
+    // });
     app.insert_resource(VoxelWorld::new())
         .add_plugins(
             DefaultPlugins
@@ -77,7 +77,6 @@ pub fn create_app() {
         )
         // .add_plugins(TemporalAntiAliasPlugin)
         .add_plugins(PlayerPlugin)
-        .add_plugins(TextureLoadPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(MovementPlugin)
         .add_plugins(GenPlugin)

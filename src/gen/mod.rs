@@ -1,8 +1,6 @@
 mod debug_gen;
 mod earth_gen;
-mod terrain_gen;
-
-pub use terrain_gen::setup_gen_thread;
+pub mod terrain_gen;
 
 use crate::Block;
 use std::ops::Range;

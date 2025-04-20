@@ -9,7 +9,10 @@ mod voxel_world;
 use self::load_orders::{
     assign_load_area, on_render_distance_change, process_unload_orders, update_load_area,
 };
-use crate::{agents::PlayerSpawn, gen::setup_gen_thread};
+use crate::r#gen::terrain_gen::{
+    process_terrain_generation, queue_terrain_generation, setup_gen_system,
+};
+use crate::{agents::PlayerSpawn, gen::*};
 use bevy::{
     app::Startup,
     ecs::schedule::{apply_deferred, IntoSystemConfigs, SystemSet},
@@ -44,7 +47,11 @@ impl Plugin for GenPlugin {
         app.insert_resource(LoadOrders::new())
             .insert_resource(BlockEntities::default())
             .add_event::<ColUnloadEvent>()
-            .add_systems(Startup, setup_gen_thread)
+            .add_systems(Startup, setup_gen_system)
+            .add_systems(
+                Update,
+                (queue_terrain_generation, process_terrain_generation),
+            )
             .add_systems(
                 Startup,
                 (assign_load_area, apply_deferred)

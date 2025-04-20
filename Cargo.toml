@@ -33,7 +33,6 @@ indexmap = "*"
 itertools = "*"
 vpsearch = "*"
 parking_lot = "*"
-crossbeam = "*"
 csv = "*"
 colorsys = "*"
 anyhow = "*"
@@ -50,7 +49,7 @@ regex = "*"
 bytemuck ="*"
 json5 = "*"
 wgpu = "23.0.1"
-wasm-bindgen = { version = "0.2.93" }
+wasm-bindgen = { version = "0.2.100" }
 bevy_egui = {version="0.33", features = ["open_url", "default_fonts", "render"] }
 riverbed_closest = { path = "crates/riverbed_closest", version = "*" }
 
@@ -62,7 +61,7 @@ opt-level = 1
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-timer = { version = "0.2" }
-wasm-bindgen = { version = "0.2.93" }
+wasm-bindgen = { version = "0.2.100" }
 web-sys = { version = "0.3" }
 console_error_panic_hook = { version = "0.1" }
 tracing-wasm = { version = "0.2" }

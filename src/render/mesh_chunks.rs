@@ -61,11 +61,8 @@ impl Chunk {
 
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(
-        &self,
-        texture_map: impl TextureMapTrait,
-        lod: usize,
-    ) -> [Option<Mesh>; 6] {
+    pub fn create_face_meshes(&self) -> [Option<Mesh>; 6] {
+        let lod = 1;
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         let voxels = self.voxel_data_lod(lod);
@@ -87,10 +84,17 @@ impl Chunk {
             let indices = bgm::indices(quads.len());
             let face: Face = face_n.into();
             for quad in quads {
-                let voxel_i = (quad >> 32) as usize;
-                let w = (MASK_6 & (quad >> 18)) as u32;
-                let h = (MASK_6 & (quad >> 24)) as u32;
-                let xyz = MASK_XYZ & quad;
+                let (first, second, third) = *quad;
+                // Extract components based on our packing scheme:
+                // first: Contains x, y, z (bits 0-17)
+                // second: Contains w (bits 0-5), h (bits 8-15)
+                // third: Contains voxel_i (v_type)
+
+                let xyz = first & MASK_XYZ as u32; // Extract x, y, z from first
+                let w = second & MASK_6 as u32; // Extract w from second (first 6 bits)
+                let h = (second >> 8) & MASK_6 as u32; // Extract h from second (shifted 8 bits)
+                let voxel_i = third as usize; // Extract voxel_i from third
+
                 let block = self.palette[voxel_i];
 
                 let color = match (block, face) {
