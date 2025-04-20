@@ -75,7 +75,6 @@ pub fn create_app() {
                     },
                 }),
         )
-        // .add_plugins(TemporalAntiAliasPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(MovementPlugin)

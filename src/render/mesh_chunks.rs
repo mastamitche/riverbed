@@ -1,8 +1,9 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, vec};
 
 use bevy::{
     image::Image,
     log::info_span,
+    math::Vec3,
     prelude::Mesh,
     render::{
         mesh::{Indices, MeshVertexAttribute},

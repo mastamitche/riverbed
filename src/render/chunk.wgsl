@@ -52,7 +52,6 @@ struct CustomVertexOutput {
     @location(4) face_light: vec4<f32>,
     @location(5) wh: vec2<f32>,
     @location(6) face_normal: vec3<i32>,    
-    @location(7) @interpolate(flat) normal: vec3<f32>,
 };
 fn positive_modulo(a: i32, b: i32) -> i32 {
     return ((a % b) + b) % b;
@@ -480,7 +479,6 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     // Store quad origin and dimensions in world_position.w and face_light.w
     out.world_position.w = f32(u32(x) | (u32(y) << 10) | (u32(z) << 20));
     out.wh = vec2(w, h);
-    out.normal = normal;
     return out;
 }
 
@@ -516,7 +514,7 @@ fn fragment(
 #ifdef PREPASS_PIPELINE
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
     var out = deferred_output(in, pbr_input);
-    
+    out.normal = in.normal;
     // Set depth value for SSAO
     out.depth = in.position.z;
     return out;
@@ -531,7 +529,7 @@ fn fragment(
     // let debug_color = get_debug_color(neighbor_count);
     let ao = calc_ao(in.world_position.xyz, in.face_normal);
     out.color = vec4<f32>(out.color.r*ao,out.color.g*ao,out.color.b*ao, 1.0);
-    
+   
 #endif
 
 

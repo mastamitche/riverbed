@@ -76,9 +76,7 @@ pub fn cam_setup(
                 },
                 ..default()
             },
-            Msaa::Off,
-            // ScreenSpaceAmbientOcclusion::default(),
-            // TemporalAntiAliasing::default(),
+            Msaa::Sample4,
             VolumetricFog::default(),
         ))
         .insert(InputManagerBundle::<CameraMovement> {
