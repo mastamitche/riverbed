@@ -83,5 +83,4 @@ pub fn cam_setup(
             ..default()
         })
         .id();
-    commands.entity(player).add_child(cam);
 }
