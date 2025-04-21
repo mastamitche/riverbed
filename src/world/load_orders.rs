@@ -102,11 +102,7 @@ impl LoadOrders {
             if old_load_area.col_dists.contains_key(col_pos) {
                 continue;
             }
-            let debug_pos = (
-                col_pos.clone().x * CHUNK_S1 as i32,
-                col_pos.clone().z * CHUNK_S1 as i32,
-            );
-            println!("Adding col_pos {:?} with dist {}", debug_pos, dist);
+
             let players = self.player_cols.entry(*col_pos).or_default();
             let is_new = players.is_empty();
             players.insert(player_id);
