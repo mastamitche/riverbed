@@ -39,10 +39,10 @@ pub struct CameraSpawn;
 
 pub fn cam_setup(
     mut commands: Commands,
-    player_query: Query<(Entity, &AABB), With<PlayerControlled>>,
+    player_query: Query<(Entity, &AABB, &Transform), With<PlayerControlled>>,
 ) {
     let input_map = InputMap::default().with_dual_axis(CameraMovement::Pan, MouseMove::default());
-    let (player, aabb) = player_query.get_single().unwrap();
+    let (player, aabb, transform) = player_query.get_single().unwrap();
 
     let initial_angle_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
     let initial_angle: f32 = initial_angle_degrees.to_radians();
@@ -58,14 +58,13 @@ pub fn cam_setup(
             },
             Camera3d::default(),
             Transform::from_xyz(
-                aabb.0.x / 2.,
-                camera_height,
-                aabb.0.z / 2. + camera_offset_z,
+                transform.translation.x,
+                transform.translation.y + camera_height,
+                transform.translation.z,
             )
-            .looking_at(Vec3::new(aabb.0.x / 2., 0.0, aabb.0.z / 2.), Vec3::Y),
+            .looking_at(transform.translation, Vec3::Y),
             Projection::Perspective(PerspectiveProjection {
-                far: 10000.,
-                fov: PI / 3.,
+                fov: 15.,
                 ..Default::default()
             }),
             DistanceFog {
