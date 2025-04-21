@@ -15,11 +15,10 @@ use std::time::Duration;
 const WALK_SPEED: f32 = 1.;
 const FREE_FLY_X_SPEED: f32 = 150.;
 const SPAWN: Vec3 = Vec3 {
-    x: 540.,
-    y: 500.,
-    z: 130.,
+    x: 500.,
+    y: 6.,
+    z: 500.,
 };
-pub const HOTBAR_SLOTS: usize = 8;
 
 pub struct PlayerPlugin;
 
@@ -108,7 +107,7 @@ pub fn spawn_player(
             },
             Mesh3d(meshes.add(Cuboid::new(0.5, 1.0, 0.5))),
             MeshMaterial3d(materials.add(Color::srgb_u8(255, 0, 0))),
-            AABB(Vec3::new(1., 1., 1.)),
+            AABB(Vec3::new(0.5, 1., 0.5)),
             Velocity(Vec3::default()),
             rd,
             TargetBlock(None),
