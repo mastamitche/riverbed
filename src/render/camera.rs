@@ -37,42 +37,29 @@ impl Actionlike for CameraMovement {
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CameraSpawn;
 
-pub fn cam_setup(
-    mut commands: Commands,
-    player_query: Query<(Entity, &AABB, &Transform), With<PlayerControlled>>,
-) {
-    let input_map = InputMap::default().with_dual_axis(CameraMovement::Pan, MouseMove::default());
-    let (player, aabb, transform) = player_query.get_single().unwrap();
+pub fn cam_setup(mut commands: Commands) {
+    let input_map: InputMap<CameraMovement> =
+        InputMap::default().with_dual_axis(CameraMovement::Pan, MouseMove::default());
 
-    let initial_angle_degrees: f32 = 40.0; // Adjust this value as needed (0 is directly top-down)
+    let initial_angle_degrees: f32 = 40.0;
     let initial_angle: f32 = initial_angle_degrees.to_radians();
-
-    let cam = commands
+    commands
         .spawn((
             Camera {
                 hdr: true,
                 ..default()
             },
             Camera3d::default(),
-            Transform::from_xyz(0., 0., 0.).looking_at(transform.translation, Vec3::Y),
+            Transform::from_xyz(0., 0., 0.),
             Projection::Perspective(PerspectiveProjection {
                 fov: initial_angle,
                 ..Default::default()
             }),
-            DistanceFog {
-                color: Color::linear_rgba(0.70, 0.85, 0.95, 1.0),
-                falloff: FogFalloff::Linear {
-                    start: 100.0,
-                    end: 10000.0,
-                },
-                ..default()
-            },
             Msaa::Sample4,
             VolumetricFog::default(),
         ))
         .insert(InputManagerBundle::<CameraMovement> {
             input_map,
             ..default()
-        })
-        .id();
+        });
 }

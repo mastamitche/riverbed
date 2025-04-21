@@ -8,11 +8,12 @@ use crate::{
     world::RenderDistance,
     Block,
 };
+use avian3d::prelude::{AngularVelocity, Collider, RigidBody};
 use bevy::{math::Vec3, prelude::*};
 use leafwing_input_manager::prelude::*;
 use std::time::Duration;
 
-const WALK_SPEED: f32 = 1.;
+const WALK_SPEED: f32 = 2.;
 const FREE_FLY_X_SPEED: f32 = 150.;
 const SPAWN: Vec3 = Vec3 {
     x: 500.,
@@ -89,6 +90,14 @@ pub fn spawn_player(
     let realm = Realm::Overworld;
     // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
     let rd = RenderDistance(3);
+
+    let player_model = commands
+        .spawn((
+            Transform::from_xyz(0., 0.5, 0.),
+            Mesh3d(meshes.add(Capsule3d::new(0.5, 1.0))),
+            MeshMaterial3d(materials.add(Color::srgb_u8(255, 0, 0))),
+        ))
+        .id();
     commands
         .spawn((
             Transform {
@@ -105,13 +114,17 @@ pub fn spawn_player(
                 cd: Timer::new(Duration::from_millis(500), TimerMode::Once),
                 intent: false,
             },
-            Mesh3d(meshes.add(Cuboid::new(0.5, 1.0, 0.5))),
-            MeshMaterial3d(materials.add(Color::srgb_u8(255, 0, 0))),
+            Mesh3d(meshes.add(Capsule3d::new(0.5, 1.0))),
             AABB(Vec3::new(0.5, 1., 0.5)),
             Velocity(Vec3::default()),
             rd,
             TargetBlock(None),
             PlayerControlled,
+        ))
+        .insert((
+            RigidBody::Dynamic,
+            Collider::cylinder(0.5, 1.),
+            AngularVelocity(Vec3::new(0., 0., 0.)),
         ))
         .insert((Walking, SteppingOn(Block::Air), Crouching(false)))
         .insert(SpatialListener::new(0.3))
@@ -136,7 +149,8 @@ pub fn spawn_player(
         .insert(InputManagerBundle::<DevCommand> {
             action_state: ActionState::default(),
             input_map: InputMap::new([(DevCommand::ToggleFly, key_binds.toggle_fly)]),
-        });
+        })
+        .add_child(player_model);
 }
 
 pub fn move_player(
