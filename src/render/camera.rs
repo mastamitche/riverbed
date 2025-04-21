@@ -44,11 +44,8 @@ pub fn cam_setup(
     let input_map = InputMap::default().with_dual_axis(CameraMovement::Pan, MouseMove::default());
     let (player, aabb, transform) = player_query.get_single().unwrap();
 
-    let initial_angle_degrees: f32 = 15.0; // Adjust this value as needed (0 is directly top-down)
+    let initial_angle_degrees: f32 = 40.0; // Adjust this value as needed (0 is directly top-down)
     let initial_angle: f32 = initial_angle_degrees.to_radians();
-    // Calculate camera position based on the angle
-    let camera_height = 100.0; // Adjust this value to change the camera's height
-    let camera_offset_z = camera_height * initial_angle.sin();
 
     let cam = commands
         .spawn((
@@ -57,14 +54,9 @@ pub fn cam_setup(
                 ..default()
             },
             Camera3d::default(),
-            Transform::from_xyz(
-                transform.translation.x,
-                transform.translation.y + camera_height,
-                transform.translation.z,
-            )
-            .looking_at(transform.translation, Vec3::Y),
+            Transform::from_xyz(0., 0., 0.).looking_at(transform.translation, Vec3::Y),
             Projection::Perspective(PerspectiveProjection {
-                fov: 15.,
+                fov: initial_angle,
                 ..Default::default()
             }),
             DistanceFog {

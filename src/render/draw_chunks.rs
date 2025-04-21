@@ -84,6 +84,7 @@ pub fn queue_mesh_generation(
         if let Some(shared_area) = shared_load_area.0.try_read() {
             if let Some((chunk_pos, dist)) = shared_area.pop_closest_change(&blocks.chunks) {
                 mesh_queue.queue.push((chunk_pos, dist));
+                // println!("Queuing chunk {:?}", chunk_pos);
             }
         }
     }
@@ -121,7 +122,8 @@ pub fn process_mesh_queue(
                 let face: Face = i.into();
 
                 if let Some(mesh) = face_mesh {
-                    let chunk_aabb = Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_S1 as f32));
+                    let chunk_aabb =
+                        Aabb::from_min_max(Vec3::ZERO, Vec3::splat((CHUNK_S1 as f32) / 8.));
 
                     // Check if entity already exists for this chunk face
                     if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
@@ -168,9 +170,9 @@ pub fn process_mesh_queue(
                                 MeshMaterial3d(new_material),
                                 Transform::from_translation(
                                     Vec3::new(
-                                        chunk_pos.x as f32,
-                                        chunk_pos.y as f32,
-                                        chunk_pos.z as f32,
+                                        (chunk_pos.x as f32) / 8.,
+                                        (chunk_pos.y as f32) / 8.,
+                                        (chunk_pos.z as f32) / 8.,
                                     ) * CHUNK_S1 as f32,
                                 ),
                                 NoFrustumCulling,
@@ -236,11 +238,7 @@ impl Plugin for Draw3d {
             .insert_resource(ChunkEntities::new())
             .add_systems(
                 Startup,
-                (
-                    setup_shared_load_area,
-                    apply_deferred,
-                    // apply_deferred,
-                )
+                (setup_shared_load_area, apply_deferred)
                     .chain()
                     .after(LoadAreaAssigned),
             )

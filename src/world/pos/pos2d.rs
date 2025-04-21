@@ -49,9 +49,9 @@ pub type ColedPos = (usize, usize);
 impl From<(Vec3, Realm)> for BlockPos2d {
     fn from((pos, realm): (Vec3, Realm)) -> Self {
         BlockPos2d {
-            x: pos.x.floor() as i32,
-            z: pos.z.floor() as i32,
-            realm: realm,
+            x: (pos.x * 8.0).floor() as i32,
+            z: (pos.z * 8.0).floor() as i32,
+            realm,
         }
     }
 }
@@ -106,8 +106,15 @@ impl From<BlockPos> for ColPos {
 }
 
 impl From<(Vec3, Realm)> for ColPos {
-    fn from(value: (Vec3, Realm)) -> Self {
-        ColPos::from(BlockPos::from(value))
+    fn from((pos, realm): (Vec3, Realm)) -> Self {
+        let scaled_x = (pos.x * 8.0).floor() as i32;
+        let scaled_z = (pos.z * 8.0).floor() as i32;
+
+        ColPos {
+            x: scaled_x / CHUNK_S1I,
+            z: scaled_z / CHUNK_S1I,
+            realm,
+        }
     }
 }
 

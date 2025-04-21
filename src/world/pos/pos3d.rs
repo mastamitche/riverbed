@@ -88,10 +88,10 @@ impl BlockPos {
 impl From<(Vec3, Realm)> for BlockPos {
     fn from((pos, realm): (Vec3, Realm)) -> Self {
         BlockPos {
-            x: pos.x.floor() as i32,
-            y: pos.y.floor() as i32,
-            z: pos.z.floor() as i32,
-            realm: realm,
+            x: (pos.x * 8.0).floor() as i32,
+            y: (pos.y * 8.0).floor() as i32,
+            z: (pos.z * 8.0).floor() as i32,
+            realm,
         }
     }
 }
@@ -99,9 +99,9 @@ impl From<(Vec3, Realm)> for BlockPos {
 impl From<BlockPos> for Vec3 {
     fn from(block_pos: BlockPos) -> Self {
         Vec3 {
-            x: block_pos.x as f32,
-            y: block_pos.y as f32,
-            z: block_pos.z as f32,
+            x: block_pos.x as f32 / 8.0,
+            y: block_pos.y as f32 / 8.0,
+            z: block_pos.z as f32 / 8.0,
         }
     }
 }
@@ -111,9 +111,9 @@ impl Add<Vec3> for BlockPos {
 
     fn add(self, rhs: Vec3) -> Self::Output {
         BlockPos {
-            x: self.x + rhs.x.floor() as i32,
-            y: self.y + rhs.y.floor() as i32,
-            z: self.z + rhs.z.floor() as i32,
+            x: self.x + (rhs.x * 8.0).floor() as i32,
+            y: self.y + (rhs.y * 8.0).floor() as i32,
+            z: self.z + (rhs.z * 8.0).floor() as i32,
             realm: self.realm,
         }
     }

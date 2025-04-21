@@ -157,11 +157,13 @@ fn get_debug_color(neighbor_count: i32) -> vec3<f32> {
 }
 
 fn count_ao_neighbors(world_pos: vec3<f32>, normal: vec3<i32>) -> i32 {
-    var count = 0;
+    var count = 0;    
+    let scaled_pos = world_pos * 8.0;
     
-    var voxel_x = i32(floor(world_pos.x - (f32(normal.x)/2.0)));
-    var voxel_y = i32(floor(world_pos.y - (f32(normal.y)/2.0)));
-    var voxel_z = i32(floor(world_pos.z - (f32(normal.z)/2.0)));
+    var voxel_x = i32(floor(scaled_pos.x - (f32(normal.x)/2.0)));
+    var voxel_y = i32(floor(scaled_pos.y - (f32(normal.y)/2.0)));
+    var voxel_z = i32(floor(scaled_pos.z - (f32(normal.z)/2.0)));
+    
     
     if (normal.x > 0) {
         // voxel_x +=1;
@@ -265,22 +267,26 @@ fn check_voxel_presence(pos: vec3<i32>) -> bool {
     let mask = 1u << u32(bit_position);
     return (packed_value & mask) != 0u;
 }
+
 fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
-    var voxel_x = i32(floor(world_pos.x - (f32(normal.x)/2.0)));
-    var voxel_y = i32(floor(world_pos.y - (f32(normal.y)/2.0)));
-    var voxel_z = i32(floor(world_pos.z - (f32(normal.z)/2.0)));
+    let scaled_pos = world_pos * 8.0;
     
+    var voxel_x = i32(floor(scaled_pos.x - (f32(normal.x)/2.0)));
+    var voxel_y = i32(floor(scaled_pos.y - (f32(normal.y)/2.0)));
+    var voxel_z = i32(floor(scaled_pos.z - (f32(normal.z)/2.0)));
+    
+    // Rest of the function remains the same
     let chunk_x = positive_modulo(voxel_x, CHUNK_SIZE);
     let chunk_y = positive_modulo(voxel_y, CHUNK_SIZE);
     let chunk_z = positive_modulo(voxel_z, CHUNK_SIZE);
 
     var chunk_pos = vec3<i32>(chunk_x, chunk_y, chunk_z);
     
-    // Calculate the fractional part of the position (where in the block the point is)
+    // Calculate the fractional part of the scaled position
     let fract_pos = vec3<f32>(
-        world_pos.x - floor(world_pos.x),
-        world_pos.y - floor(world_pos.y),
-        world_pos.z - floor(world_pos.z)
+        scaled_pos.x - floor(scaled_pos.x),
+        scaled_pos.y - floor(scaled_pos.y),
+        scaled_pos.z - floor(scaled_pos.z)
     );
     
     // Calculate weights based on position within the block
@@ -425,7 +431,7 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     var x = f32(vertex_info & MASK6) - EPSILON;
     var y = f32((vertex_info >> 6) & MASK6) - EPSILON;
     var z = f32((vertex_info >> 12) & MASK6) - EPSILON;
-    var position = vec4(x, y, z, 1.0);
+    var position = vec4(x/8., y/8., z/8., 1.0);
     
     // Quad specific information
     var quad_info = vertex.voxel_data.y;
@@ -433,8 +439,8 @@ fn vertex(vertex: VertexInput) -> CustomVertexOutput {
     var normal = normal_from_id(n_id);
     var c_id = (quad_info >> 3) & MASK9;
     var face_color = color_from_id(c_id);
-    var h = f32((quad_info >> 18) & MASK6); // Height is at bits 18-23
-    var w = f32((quad_info >> 24) & MASK6); // Width is at bits 24-29
+    var h = f32((quad_info >> 18) & MASK6)/8.; // Height is at bits 18-23
+    var w = f32((quad_info >> 24) & MASK6)/8.; // Width is at bits 24-29
     var face_light = light_from_id(n_id);
     
     out.position = mesh_position_local_to_clip(

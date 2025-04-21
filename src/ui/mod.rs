@@ -13,9 +13,9 @@ impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(EguiPlugin);
         app.insert_resource(CameraSettings {
-            fov: 15.0,
-            height: 0.0,
-            x_z_offset: 0.0,
+            fov: 40.0,
+            height: 15.0,
+            x_z_offset: 6.0,
         })
         .insert_resource(CameraOrbit {
             angle: std::f32::consts::PI / 4.0,
@@ -25,10 +25,12 @@ impl Plugin for UIPlugin {
         .add_systems(
             Update,
             (
-                ui_system,
+                ui_player_system,
                 handle_camera_rotation,
                 adjust_camera_angle,
-                update_camera_projection,
+                //Debug testing
+                // ui_camera_system,
+                // update_camera_projection,
             ),
         );
     }
@@ -111,7 +113,7 @@ pub fn adjust_camera_angle(
     camera_transform.look_at(player_pos, Vec3::Y);
 }
 
-fn ui_system(
+fn ui_camera_system(
     mut contexts: EguiContexts,
     mut camera_settings: ResMut<CameraSettings>,
     player_query: Query<(Entity, &AABB, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
@@ -125,6 +127,13 @@ fn ui_system(
                 .text("Distance off center"),
         );
     });
+}
+fn ui_player_system(
+    mut contexts: EguiContexts,
+    mut camera_settings: ResMut<CameraSettings>,
+    player_query: Query<(Entity, &AABB, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
+    query: Query<&Transform, With<Camera3d>>,
+) {
     let player_pos = format!(
         "Player pos: x: {}, y: {}, z: {}",
         player_query.single().2.translation.x.floor(),

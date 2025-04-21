@@ -66,34 +66,49 @@ fn extent(v: f32, size: f32) -> Vec<i32> {
             .collect_vec()
     }
 }
-
 fn blocks_perp_y(pos: Vec3, realm: Realm, aabb: &AABB) -> impl Iterator<Item = BlockPos> {
-    iproduct!(extent(pos.x, aabb.0.x), extent(pos.z, aabb.0.z)).map(move |(x, z)| BlockPos {
+    // Apply scaling factor to the position
+    let scaled_pos = pos * 8.0;
+    iproduct!(
+        extent(scaled_pos.x, aabb.0.x * 8.0),
+        extent(scaled_pos.z, aabb.0.z * 8.0)
+    )
+    .map(move |(x, z)| BlockPos {
         x,
-        y: pos.y.floor() as i32,
+        y: scaled_pos.y.floor() as i32,
         z,
         realm: realm,
     })
 }
-
 fn blocks_perp_z(pos: Vec3, realm: Realm, aabb: &AABB) -> impl Iterator<Item = BlockPos> {
-    iproduct!(extent(pos.x, aabb.0.x), extent(pos.y, aabb.0.y)).map(move |(x, y)| BlockPos {
+    // Apply scaling factor to the position
+    let scaled_pos = pos * 8.0;
+    iproduct!(
+        extent(scaled_pos.x, aabb.0.x * 8.0),
+        extent(scaled_pos.y, aabb.0.y * 8.0)
+    )
+    .map(move |(x, y)| BlockPos {
         x,
         y,
-        z: pos.z.floor() as i32,
+        z: scaled_pos.z.floor() as i32,
         realm: realm,
     })
 }
 
 fn blocks_perp_x(pos: Vec3, realm: Realm, aabb: &AABB) -> impl Iterator<Item = BlockPos> {
-    iproduct!(extent(pos.y, aabb.0.y), extent(pos.z, aabb.0.z)).map(move |(y, z)| BlockPos {
-        x: pos.x.floor() as i32,
+    // Apply scaling factor to the position
+    let scaled_pos = pos * 8.0;
+    iproduct!(
+        extent(scaled_pos.y, aabb.0.y * 8.0),
+        extent(scaled_pos.z, aabb.0.z * 8.0)
+    )
+    .map(move |(y, z)| BlockPos {
+        x: scaled_pos.x.floor() as i32,
         y,
         z,
         realm: realm,
     })
 }
-
 fn update_stepped_block(
     blocks: Res<VoxelWorld>,
     mut query: Query<(&Transform, &Realm, &AABB, &mut SteppingOn)>,
@@ -107,7 +122,9 @@ fn update_stepped_block(
             if block.is_traversable() {
                 continue;
             }
-            let dist = (below.x - block_pos.x as f32).abs() - (below.y - block_pos.y as f32).abs();
+            let scaled_below = below * 8.0;
+            let dist = (scaled_below.x - block_pos.x as f32).abs()
+                - (scaled_below.y - block_pos.y as f32).abs();
             if dist < min_dist {
                 min_dist = dist;
                 closest_block = block;
@@ -116,7 +133,6 @@ fn update_stepped_block(
         stepping_on.0 = closest_block;
     }
 }
-
 fn process_jumps(
     time: Res<Time>,
     mut query: Query<(&mut Jumping, &mut Velocity, &SteppingOn), With<Walking>>,
@@ -195,17 +211,21 @@ fn apply_velocity(
             continue;
         }
         let applied_velocity = velocity.0 * time.delta_secs();
-        // split the motion on all 3 axis, check for collisions, adjust the final speed vector if there's any
-        // x
+
+        // x axis
         let xpos = if applied_velocity.x > 0. {
             aabb.0.x + transform.translation.x
         } else {
             transform.translation.x
         };
         let mut stopped = false;
-        for x in extent(xpos, applied_velocity.x).into_iter().skip(1) {
+        // Scale the extent calculation
+        for x in extent(xpos * 8.0, applied_velocity.x * 8.0)
+            .into_iter()
+            .skip(1)
+        {
             let pos_x = Vec3 {
-                x: x as f32,
+                x: x as f32 / 8.0, // Convert back to world space for other calculations
                 y: transform.translation.y,
                 z: transform.translation.z,
             };
@@ -213,9 +233,9 @@ fn apply_velocity(
             {
                 // there's a collision in this direction, stop at the block limit
                 if applied_velocity.x > 0. {
-                    transform.translation.x = pos_x.x - aabb.0.x - 0.001;
+                    transform.translation.x = (x as f32 / 8.0) - aabb.0.x - 0.001;
                 } else {
-                    transform.translation.x = pos_x.x + 1.001;
+                    transform.translation.x = (x as f32 / 8.0) + 1.001 / 8.0; // Scale the offset
                 }
                 velocity.0.x = 0.;
                 stopped = true;
@@ -225,26 +245,29 @@ fn apply_velocity(
         if !stopped {
             transform.translation.x += applied_velocity.x;
         }
-        // y
+
+        // y axis (similar changes)
         let ypos: f32 = if applied_velocity.y > 0. {
             aabb.0.y + transform.translation.y
         } else {
             transform.translation.y
         };
         let mut stopped = false;
-        for y in extent(ypos, applied_velocity.y).into_iter().skip(1) {
+        for y in extent(ypos * 8.0, applied_velocity.y * 8.0)
+            .into_iter()
+            .skip(1)
+        {
             let pos_y = Vec3 {
                 x: transform.translation.x,
-                y: y as f32,
+                y: y as f32 / 8.0,
                 z: transform.translation.z,
             };
             if blocks_perp_y(pos_y, *realm, aabb).any(|pos| !blocks.get_block(pos).is_traversable())
             {
-                // there's a collision in this direction, stop at the block limit
                 if applied_velocity.y > 0. {
-                    transform.translation.y = pos_y.y - aabb.0.y - 0.001;
+                    transform.translation.y = (y as f32 / 8.0) - aabb.0.y - 0.001;
                 } else {
-                    transform.translation.y = pos_y.y + 1.001;
+                    transform.translation.y = (y as f32 / 8.0) + 1.001 / 8.0;
                 }
                 velocity.0.y = 0.;
                 stopped = true;
@@ -254,26 +277,29 @@ fn apply_velocity(
         if !stopped {
             transform.translation.y += applied_velocity.y;
         }
-        // z
+
+        // z axis (similar changes)
         let zpos: f32 = if applied_velocity.z > 0. {
             aabb.0.z + transform.translation.z
         } else {
             transform.translation.z
         };
         let mut stopped = false;
-        for z in extent(zpos, applied_velocity.z).into_iter().skip(1) {
+        for z in extent(zpos * 8.0, applied_velocity.z * 8.0)
+            .into_iter()
+            .skip(1)
+        {
             let pos_z = Vec3 {
                 x: transform.translation.x,
                 y: transform.translation.y,
-                z: z as f32,
+                z: z as f32 / 8.0,
             };
             if blocks_perp_z(pos_z, *realm, aabb).any(|pos| !blocks.get_block(pos).is_traversable())
             {
-                // there's a collision in this direction, stop at the block limit
                 if applied_velocity.z > 0. {
-                    transform.translation.z = pos_z.z - aabb.0.z - 0.001;
+                    transform.translation.z = (z as f32 / 8.0) - aabb.0.z - 0.001;
                 } else {
-                    transform.translation.z = pos_z.z + 1.001;
+                    transform.translation.z = (z as f32 / 8.0) + 1.001 / 8.0;
                 }
                 velocity.0.z = 0.;
                 stopped = true;

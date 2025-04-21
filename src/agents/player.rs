@@ -12,7 +12,7 @@ use bevy::{math::Vec3, prelude::*};
 use leafwing_input_manager::prelude::*;
 use std::time::Duration;
 
-const WALK_SPEED: f32 = 7.;
+const WALK_SPEED: f32 = 1.;
 const FREE_FLY_X_SPEED: f32 = 150.;
 const SPAWN: Vec3 = Vec3 {
     x: 540.,
@@ -81,10 +81,15 @@ pub enum DevCommand {
     ToggleFly,
 }
 
-pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
+pub fn spawn_player(
+    mut commands: Commands,
+    key_binds: Res<KeyBinds>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let realm = Realm::Overworld;
     // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
-    let rd = RenderDistance(16);
+    let rd = RenderDistance(3);
     commands
         .spawn((
             Transform {
@@ -101,7 +106,9 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
                 cd: Timer::new(Duration::from_millis(500), TimerMode::Once),
                 intent: false,
             },
-            AABB(Vec3::new(0.5, 1.7, 0.5)),
+            Mesh3d(meshes.add(Cuboid::new(0.5, 1.0, 0.5))),
+            MeshMaterial3d(materials.add(Color::srgb_u8(255, 0, 0))),
+            AABB(Vec3::new(1., 1., 1.)),
             Velocity(Vec3::default()),
             rd,
             TargetBlock(None),

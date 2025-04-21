@@ -121,6 +121,8 @@ pub fn assign_load_area(
     mut col_orders: ResMut<LoadOrders>,
 ) {
     let (player, transform, realm, render_dist) = query.single_mut();
+    let scaled_translation = transform.translation * 8.0;
+    let col = ColPos::from((scaled_translation, *realm));
     let col = ColPos::from((transform.translation, *realm));
     let old_load_area = PlayerArea::empty();
     let new_load_area = PlayerArea::new(col, *render_dist);
