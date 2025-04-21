@@ -98,7 +98,7 @@ impl VoxelWorld {
         let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(pos);
         self.chunks
             .entry(chunk_pos)
-            .or_insert_with(|| TrackedChunk::new())
+            .or_insert_with(TrackedChunk::new)
             .set(chunked_pos, block);
         self.mark_change(chunk_pos, chunked_pos, block);
         true
@@ -150,7 +150,7 @@ impl VoxelWorld {
         if self
             .chunks
             .entry(chunk_pos)
-            .or_insert_with(|| TrackedChunk::new())
+            .or_insert_with(TrackedChunk::new)
             .set_if_empty(chunked_pos, block)
         {
             self.mark_change(chunk_pos, chunked_pos, block);
