@@ -1,7 +1,9 @@
 use super::{block_action::BlockActionPlugin, key_binds::KeyBinds};
 use crate::world::{BlockPos, BlockRayCastHit, Realm, VoxelWorld};
 use crate::{world::RenderDistance, Block};
-use avian3d::prelude::{AngularVelocity, Collider, LinearVelocity, LockedAxes, RigidBody};
+use avian3d::prelude::{
+    AngularVelocity, Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody,
+};
 use bevy::{math::Vec3, prelude::*};
 use leafwing_input_manager::prelude::*;
 use std::time::Duration;
@@ -39,10 +41,7 @@ impl Plugin for PlayerPlugin {
                 Update,
                 check_unlock_player.run_if(resource_exists::<PlayerUnlockTimer>),
             )
-            .add_systems(
-                Update,
-                (smooth_player_step, move_player).run_if(player_phsysics_ready),
-            );
+            .add_systems(Update, (move_player).run_if(player_phsysics_ready));
     }
 }
 #[derive(Resource)]
@@ -116,7 +115,9 @@ pub fn check_unlock_player(
         let entity = player_query.single();
         commands.entity(entity).insert((
             RigidBody::Dynamic,
-            Collider::sphere(2.0),
+            Collider::sphere(0.5),
+            ComputedMass::new(80.0),
+            Friction::new(0.4),
             LinearVelocity(Vec3::new(0., 0., 0.)),
             LockedAxes::new()
                 .lock_rotation_y()
@@ -178,10 +179,13 @@ pub fn spawn_player(
         })
         .add_child(player_model);
 }
-
 pub fn move_player(
-    mut player_query: Query<(&mut LinearVelocity, &ActionState<Dir>), With<PlayerControlled>>,
+    mut player_query: Query<
+        (&Transform, &mut LinearVelocity, &ActionState<Dir>),
+        With<PlayerControlled>,
+    >,
     cam_query: Query<&Transform, With<Camera>>,
+    world: Res<VoxelWorld>,
     time: Res<Time>,
 ) {
     let cam_transform = if let Ok(ct) = cam_query.get_single() {
@@ -189,64 +193,62 @@ pub fn move_player(
     } else {
         Transform::default()
     };
-    let (mut velocity, action_state) = player_query.single_mut();
+
+    let (transform, mut velocity, action_state) = player_query.single_mut();
+    let player_pos = transform.translation;
     let delta_secs = time.delta_secs();
+
+    // Part 1: Handle player input movement
     let mut movement = Vec3::default();
     for action in action_state.get_pressed() {
         movement += Vec3::from(action);
     }
+
     if movement.length_squared() > 0. {
         movement = movement.normalize();
         movement = Vec3::Y.cross(*cam_transform.right()) * movement.z
             + cam_transform.right() * movement.x
             + movement.y * Vec3::Y;
-        velocity.0 = movement * WALK_SPEED * delta_secs;
+
+        // Only set horizontal movement from input
+        let horizontal_speed = WALK_SPEED * delta_secs;
+        velocity.0.x = movement.x * horizontal_speed;
+        velocity.0.z = movement.z * horizontal_speed;
     } else {
-        velocity.0 = Vec3::ZERO;
+        velocity.0.x = 0.0;
+        velocity.0.z = 0.0;
     }
-}
 
-pub fn smooth_player_step(
-    mut player_query: Query<(&Transform, &mut LinearVelocity), With<PlayerControlled>>,
-    world: Res<VoxelWorld>,
-    step_settings: Res<StepUpSettings>,
-    time: Res<Time>,
-) {
-    let (transform, mut velocity) = player_query.single_mut();
-    let player_pos = transform.translation;
-
-    // Check if player is on ground or close to it
-    let below_pos = player_pos + Vec3::new(0.0, -1.1, 0.0);
+    // Part 2: Handle physics (gravity and step-up)
+    // Check if player is on ground
+    let below_pos = player_pos + Vec3::new(0.0, -1.05, 0.0);
     let block_below = world.get_block_safe(BlockPos::from((below_pos, Realm::Overworld)));
+    let on_ground = block_below != Block::Air;
 
-    // Check for a step in front of the player in the direction of movement
-    let movement_dir = Vec3::new(velocity.0.x, 0.0, velocity.0.z).normalize_or_zero();
-    if movement_dir.length_squared() > 0.01 {
-        let front_pos = player_pos + movement_dir * 1.1;
-        let front_block = world.get_block_safe(BlockPos::from((front_pos, Realm::Overworld)));
+    // Simple stair-stepping logic - only if we're moving horizontally
+    if on_ground && (velocity.0.x.abs() + velocity.0.z.abs() > 0.1) {
+        let movement_dir = Vec3::new(velocity.0.x, 0.0, velocity.0.z).normalize();
+        let step_pos = player_pos + movement_dir * 0.8 + Vec3::new(0.0, 0.5, 0.0);
+        let step_block = world.get_block_safe(BlockPos::from((step_pos, Realm::Overworld)));
 
-        // Check for step up (solid block in front but air above it)
-        if front_block != Block::Air {
-            for step_height in 1..=(step_settings.max_step_height as i32) {
-                let step_check_pos = front_pos + Vec3::new(0.0, step_height as f32, 0.0);
-                let above_step =
-                    world.get_block_safe(BlockPos::from((step_check_pos, Realm::Overworld)));
-
-                if above_step == Block::Air {
-                    // Apply upward velocity to step up
-                    velocity.0.y = velocity
-                        .0
-                        .y
-                        .max(step_settings.smoothing_factor * time.delta_secs() * 600.0);
-                    break;
-                }
-            }
+        if step_block == Block::Air
+            && world.get_block_safe(BlockPos::from((
+                step_pos + Vec3::new(0.0, -0.5, 0.0),
+                Realm::Overworld,
+            ))) != Block::Air
+        {
+            // Found a step, apply gentle upward velocity
+            velocity.0.y = 5.0;
         }
     }
 
-    // Apply stronger downward force when falling
-    if block_below == Block::Air && velocity.0.y < 0.0 {
-        velocity.0.y *= step_settings.gravity_multiplier;
+    // Apply gravity when in air
+    if !on_ground {
+        // Cap falling speed to prevent excessive acceleration
+        velocity.0.y = (velocity.0.y - 20.0 * delta_secs).max(-20.0);
+    } else if velocity.0.y < 0.0 {
+        // Stop falling when on ground
+        velocity.0.y = 0.0;
     }
 }
 fn player_phsysics_ready(

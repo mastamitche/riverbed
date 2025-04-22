@@ -27,7 +27,7 @@ impl Plugin for UIPlugin {
         .add_systems(
             Update,
             (
-                ui_player_system,
+                // ui_player_system,
                 handle_camera_rotation,
                 adjust_camera_angle,
                 //Debug testing
