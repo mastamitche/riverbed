@@ -1,5 +1,8 @@
 use crate::render::camera::CameraSpawn;
-use bevy::{pbr::VolumetricLight, prelude::*};
+use bevy::{
+    pbr::{light_consts::lux::OVERCAST_DAY, VolumetricLight},
+    prelude::*,
+};
 use bevy_atmosphere::prelude::{AtmosphereCamera, AtmosphereModel, AtmospherePlugin, Nishita};
 use std::f32::consts::PI;
 const DAY_LENGTH_MINUTES: f32 = 0.2;
@@ -19,7 +22,7 @@ fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<Camera3d>>) {
         Sun,
         DirectionalLight {
             color: Color::srgb_u8(201, 226, 255),
-            illuminance: 1000.0,
+            illuminance: OVERCAST_DAY,
             // Cant do shadows for now
             // Get errors with custom pipeline
             // shadows_enabled: true,
@@ -33,8 +36,8 @@ pub struct SkyPlugin;
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(AmbientLight {
-            color: Color::WHITE,
-            brightness: 800.0,
+            color: Color::srgb_u8(201, 226, 255),
+            brightness: OVERCAST_DAY,
         })
         .insert_resource(AtmosphereModel::new(Nishita { ..default() }))
         .insert_resource(CycleTimer(Timer::new(
