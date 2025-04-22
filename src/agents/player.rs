@@ -81,8 +81,8 @@ pub fn spawn_player(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let realm = Realm::Overworld;
-    // Render distance nerfed from 64 to 32 (4km to 2km) while we don't have instancing
-    let rd = RenderDistance(3);
+
+    let rd = RenderDistance(4);
 
     let player_model = commands
         .spawn((
@@ -99,14 +99,13 @@ pub fn spawn_player(
             },
             Visibility::default(),
             realm,
-            Mesh3d(meshes.add(Capsule3d::new(0.5, 1.0))),
             rd,
             TargetBlock(None),
             PlayerControlled,
         ))
         .insert((
             RigidBody::Dynamic,
-            Collider::cylinder(0.5, 1.),
+            Collider::sphere(1.0),
             LinearVelocity(Vec3::new(0., 0., 0.)),
             LockedAxes::new()
                 .lock_rotation_y()
@@ -159,7 +158,6 @@ pub fn move_player(
         movement = Vec3::Y.cross(*cam_transform.right()) * movement.z
             + cam_transform.right() * movement.x
             + movement.y * Vec3::Y;
-        movement.y = 0.;
         velocity.0 = movement * WALK_SPEED * delta_secs;
     }
 }

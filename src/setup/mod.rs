@@ -41,7 +41,7 @@ pub fn create_app() {
     //     },
     // });
     app.insert_resource(VoxelWorld::new())
-        .insert_resource(Gravity(Vec3::NEG_Y * 19.6))
+        .insert_resource(Gravity(Vec3::NEG_Y * 100.))
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
