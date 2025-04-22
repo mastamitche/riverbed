@@ -4,7 +4,6 @@
 #![feature(f16)]
 
 mod agents;
-mod asset_processing;
 mod block;
 mod gen;
 mod items;

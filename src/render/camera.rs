@@ -1,13 +1,6 @@
-use crate::agents::{PlayerControlled, PlayerSpawn};
-use bevy::core_pipeline::experimental::taa::TemporalAntiAliasing;
-use bevy::pbr::ScreenSpaceAmbientOcclusion;
-use bevy::render::camera::ScalingMode;
-use bevy::window::CursorGrabMode;
-use bevy::{pbr::VolumetricFog, prelude::*};
+use crate::agents::PlayerSpawn;
+use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
-use std::f32::consts::PI;
-
-const CAMERA_PAN_RATE: f32 = 0.06;
 
 pub struct Camera3dPlugin;
 
@@ -56,7 +49,6 @@ pub fn cam_setup(mut commands: Commands) {
                 ..Default::default()
             }),
             Msaa::Sample4,
-            VolumetricFog::default(),
         ))
         .insert(InputManagerBundle::<CameraMovement> {
             input_map,

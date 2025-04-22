@@ -6,7 +6,6 @@
 use wasm_bindgen::prelude::*;
 
 mod agents;
-mod asset_processing;
 mod block;
 mod gen;
 mod items;
