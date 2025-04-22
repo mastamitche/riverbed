@@ -62,7 +62,7 @@ impl Chunk {
 
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(&self) -> [Option<Mesh>; 6] {
+    pub fn create_face_meshes(&self) -> [Option<(Mesh, Vec<[Vec3; 4]>)>; 6] {
         let lod = 1;
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
@@ -80,21 +80,22 @@ impl Chunk {
             }));
         bgm::mesh(&voxels, &mut mesh_data, transparents);
         let mut meshes = core::array::from_fn(|_| None);
+
         for (face_n, quads) in mesh_data.quads.iter().enumerate() {
             let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len() * 4);
             let indices = bgm::indices(quads.len());
             let face: Face = face_n.into();
+
+            // Collect physics quad data
+            let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
+
             for quad in quads {
                 let (first, second, third) = *quad;
-                // Extract components based on our packing scheme:
-                // first: Contains x, y, z (bits 0-17)
-                // second: Contains w (bits 0-5), h (bits 8-15)
-                // third: Contains voxel_i (v_type)
-
-                let xyz = first & MASK_XYZ as u32; // Extract x, y, z from first
-                let w = second & MASK_6 as u32; // Extract w from second (first 6 bits)
-                let h = (second >> 8) & MASK_6 as u32; // Extract h from second (shifted 8 bits)
-                let voxel_i = third as usize; // Extract voxel_i from third
+                // Extract components based on our packing scheme
+                let xyz = first & MASK_XYZ as u32;
+                let w = second & MASK_6 as u32;
+                let h = (second >> 8) & MASK_6 as u32;
+                let voxel_i = third as usize;
 
                 let block = self.palette[voxel_i];
 
@@ -104,6 +105,8 @@ impl Chunk {
                     (block, _) if block.is_foliage() => 0b010_101_001,
                     _ => 0b111_111_111,
                 };
+
+                // Get vertices for rendering
                 let vertices = face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
                 let quad_info = (w << 24) | (h << 18) | (color << 3) | face_n as u32;
                 voxel_data.extend_from_slice(&[
@@ -112,19 +115,64 @@ impl Chunk {
                     [vertices[2], quad_info],
                     [vertices[3], quad_info],
                 ]);
+
+                // Create physics quad vertices (Vec3 positions)
+                // Decode the packed vertices to get actual positions
+                let x = (xyz & 0x3F) as f32 / 8.0;
+                let y = ((xyz >> 6) & 0x3F) as f32 / 8.0;
+                let z = ((xyz >> 12) & 0x3F) as f32 / 8.0;
+                let width = w as f32 / 8.0;
+                let height = h as f32 / 8.0;
+
+                // Create physics vertices based on face orientation
+                let physics_verts = match face {
+                    Face::Up | Face::Down => {
+                        let y_val = if face == Face::Up { y } else { y - height };
+                        [
+                            Vec3::new(x, y_val, z),
+                            Vec3::new(x + width, y_val, z),
+                            Vec3::new(x + width, y_val, z + height),
+                            Vec3::new(x, y_val, z + height),
+                        ]
+                    }
+                    Face::Left | Face::Right => {
+                        let x_val = if face == Face::Right { x + width } else { x };
+                        [
+                            Vec3::new(x_val, y, z),
+                            Vec3::new(x_val, y, z + height),
+                            Vec3::new(x_val, y + width, z + height),
+                            Vec3::new(x_val, y + width, z),
+                        ]
+                    }
+                    Face::Front | Face::Back => {
+                        let z_val = if face == Face::Front { z + height } else { z };
+                        [
+                            Vec3::new(x, y, z_val),
+                            Vec3::new(x + width, y, z_val),
+                            Vec3::new(x + width, y + height, z_val),
+                            Vec3::new(x, y + height, z_val),
+                        ]
+                    }
+                };
+
+                physics_quads.push(physics_verts);
             }
-            meshes[face_n] = Some(
-                Mesh::new(
-                    PrimitiveTopology::TriangleList,
-                    RenderAssetUsages::RENDER_WORLD,
-                )
-                .with_inserted_attribute(ATTRIBUTE_VOXEL_DATA, voxel_data)
-                .with_inserted_indices(Indices::U32(indices)),
+
+            // Create the render mesh
+            let render_mesh = Mesh::new(
+                PrimitiveTopology::TriangleList,
+                RenderAssetUsages::RENDER_WORLD,
             )
+            .with_inserted_attribute(ATTRIBUTE_VOXEL_DATA, voxel_data)
+            .with_inserted_indices(Indices::U32(indices));
+
+            meshes[face_n] = Some((render_mesh, physics_quads));
         }
+
         mesh_build_span.exit();
         meshes
     }
+
     pub fn create_ao_texture_data(&self) -> Image {
         let dim = CHUNKP_S1;
 

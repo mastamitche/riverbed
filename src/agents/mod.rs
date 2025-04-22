@@ -1,7 +1,5 @@
-mod player;
-mod movement;
 mod block_action;
 mod key_binds;
-pub use player::*;
-pub use movement::*;
+mod player;
 pub use block_action::*;
+pub use player::*;

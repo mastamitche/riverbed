@@ -1,23 +1,16 @@
-use super::{
-    block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching, FreeFly, Speed, SteppingOn,
-    Walking,
-};
+use super::{block_action::BlockActionPlugin, key_binds::KeyBinds};
 use crate::world::{BlockRayCastHit, Realm};
-use crate::{
-    agents::{Gravity, Heading, Jumping, Velocity, AABB},
-    world::RenderDistance,
-    Block,
-};
-use avian3d::prelude::{AngularVelocity, Collider, RigidBody};
+use crate::{world::RenderDistance, Block};
+use avian3d::prelude::{AngularVelocity, Collider, LinearVelocity, LockedAxes, RigidBody};
 use bevy::{math::Vec3, prelude::*};
 use leafwing_input_manager::prelude::*;
 use std::time::Duration;
 
-const WALK_SPEED: f32 = 2.;
+const WALK_SPEED: f32 = 200.;
 const FREE_FLY_X_SPEED: f32 = 150.;
 const SPAWN: Vec3 = Vec3 {
     x: 500.,
-    y: 6.,
+    y: 8.,
     z: 500.,
 };
 
@@ -37,7 +30,7 @@ impl Plugin for PlayerPlugin {
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
             )
-            .add_systems(Update, (move_player, toggle_fly));
+            .add_systems(Update, move_player);
     }
 }
 
@@ -106,17 +99,7 @@ pub fn spawn_player(
             },
             Visibility::default(),
             realm,
-            Gravity(50.),
-            Heading(Vec3::default()),
-            Speed(WALK_SPEED),
-            Jumping {
-                force: 13.,
-                cd: Timer::new(Duration::from_millis(500), TimerMode::Once),
-                intent: false,
-            },
             Mesh3d(meshes.add(Capsule3d::new(0.5, 1.0))),
-            AABB(Vec3::new(0.5, 1., 0.5)),
-            Velocity(Vec3::default()),
             rd,
             TargetBlock(None),
             PlayerControlled,
@@ -124,9 +107,12 @@ pub fn spawn_player(
         .insert((
             RigidBody::Dynamic,
             Collider::cylinder(0.5, 1.),
-            AngularVelocity(Vec3::new(0., 0., 0.)),
+            LinearVelocity(Vec3::new(0., 0., 0.)),
+            LockedAxes::new()
+                .lock_rotation_y()
+                .lock_rotation_x()
+                .lock_rotation_z(),
         ))
-        .insert((Walking, SteppingOn(Block::Air), Crouching(false)))
         .insert(SpatialListener::new(0.3))
         .insert(InputManagerBundle::<Dir> {
             action_state: ActionState::default(),
@@ -135,8 +121,6 @@ pub fn spawn_player(
                 (Dir::Left, key_binds.left),
                 (Dir::Back, key_binds.backward),
                 (Dir::Right, key_binds.right),
-                (Dir::Down, key_binds.crouch),
-                (Dir::Up, key_binds.jump),
             ]),
         })
         .insert(InputManagerBundle::<Action> {
@@ -154,70 +138,28 @@ pub fn spawn_player(
 }
 
 pub fn move_player(
-    mut player_query: Query<(
-        &mut Heading,
-        &mut Jumping,
-        &mut Crouching,
-        &Speed,
-        &ActionState<Dir>,
-    )>,
+    mut player_query: Query<(&mut LinearVelocity, &ActionState<Dir>)>,
     cam_query: Query<&Transform, With<Camera>>,
+    time: Res<Time>,
 ) {
     let cam_transform = if let Ok(ct) = cam_query.get_single() {
         *ct
     } else {
         Transform::default()
     };
-    let (mut heading, mut jumping, mut crouching, speed, action_state) = player_query.single_mut();
-    jumping.intent = false;
-    crouching.0 = false;
+    let (mut velocity, action_state) = player_query.single_mut();
 
+    let delta_secs = time.delta_secs();
     let mut movement = Vec3::default();
     for action in action_state.get_pressed() {
-        if action == Dir::Up {
-            jumping.intent = true;
-        } else if action == Dir::Down {
-            crouching.0 = true;
-        } else {
-            movement += Vec3::from(action);
-        }
+        movement += Vec3::from(action);
     }
     if movement.length_squared() > 0. {
         movement = movement.normalize();
         movement = Vec3::Y.cross(*cam_transform.right()) * movement.z
             + cam_transform.right() * movement.x
             + movement.y * Vec3::Y;
+        movement.y = 0.;
+        velocity.0 = movement * WALK_SPEED * delta_secs;
     }
-    heading.0 = movement * speed.0;
-    heading.0.y = f32::NAN;
-}
-
-fn toggle_fly(
-    mut commands: Commands,
-    mut player_query: Query<(
-        Entity,
-        &mut Speed,
-        &ActionState<DevCommand>,
-        Option<&Walking>,
-    )>,
-) {
-    let (entity, mut speed, action_state, walking_opt) = player_query.single_mut();
-    for dev_command in action_state.get_just_pressed() {
-        if dev_command == DevCommand::ToggleFly {
-            if walking_opt.is_some() {
-                commands.entity(entity).remove::<Walking>().insert(FreeFly);
-                speed.0 = FREE_FLY_X_SPEED;
-            } else {
-                commands.entity(entity).remove::<FreeFly>().insert(Walking);
-                speed.0 = WALK_SPEED;
-            }
-        }
-    }
-}
-
-fn reset_heading(mut player_query: Query<&mut Heading, With<PlayerControlled>>) {
-    let Ok(mut heading) = player_query.get_single_mut() else {
-        return;
-    };
-    heading.0 = Vec3::new(0., 0., 0.);
 }

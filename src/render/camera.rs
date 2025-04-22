@@ -1,4 +1,4 @@
-use crate::agents::{PlayerControlled, PlayerSpawn, AABB};
+use crate::agents::{PlayerControlled, PlayerSpawn};
 use bevy::core_pipeline::experimental::taa::TemporalAntiAliasing;
 use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::render::camera::ScalingMode;

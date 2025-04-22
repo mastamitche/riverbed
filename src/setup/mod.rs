@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/blocks.rs"));
-use agents::{MovementPlugin, PlayerPlugin};
-use avian3d::PhysicsPlugins;
+use agents::PlayerPlugin;
+use avian3d::{prelude::Gravity, PhysicsPlugins};
 use bevy::{
     core_pipeline::experimental::taa::TemporalAntiAliasPlugin,
     image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
@@ -41,6 +41,7 @@ pub fn create_app() {
     //     },
     // });
     app.insert_resource(VoxelWorld::new())
+        .insert_resource(Gravity(Vec3::NEG_Y * 19.6))
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
@@ -79,7 +80,6 @@ pub fn create_app() {
         ))
         .add_plugins(PlayerPlugin)
         .add_plugins(UIPlugin)
-        .add_plugins(MovementPlugin)
         .add_plugins(GenPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin)

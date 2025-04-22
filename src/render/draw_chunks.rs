@@ -6,6 +6,8 @@ use crate::block::Face;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
 use crate::world::{ChunkPos, VoxelWorld, CHUNK_S1, Y_CHUNKS};
+use avian3d::math::Quaternion;
+use avian3d::prelude::{Collider, RigidBody};
 use bevy::color::palettes::css;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
@@ -121,10 +123,59 @@ pub fn process_mesh_queue(
             for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                 let face: Face = i.into();
 
-                if let Some(mesh) = face_mesh {
+                if let Some((mesh, physics_quads)) = face_mesh {
                     let chunk_aabb =
                         Aabb::from_min_max(Vec3::ZERO, Vec3::splat((CHUNK_S1 as f32) / 8.));
+                    let mut collider_shapes: Vec<(Vec3, Quaternion, Collider)> = Vec::new();
 
+                    for quad in physics_quads {
+                        // Extract min and max points to get the bounds
+                        let min_x = quad.iter().map(|v| v.x).reduce(f32::min).unwrap();
+                        let max_x = quad.iter().map(|v| v.x).reduce(f32::max).unwrap();
+                        let min_y = quad.iter().map(|v| v.y).reduce(f32::min).unwrap();
+                        let max_y = quad.iter().map(|v| v.y).reduce(f32::max).unwrap();
+                        let min_z = quad.iter().map(|v| v.z).reduce(f32::min).unwrap();
+                        let max_z = quad.iter().map(|v| v.z).reduce(f32::max).unwrap();
+
+                        // Calculate center and half-extents
+                        let center = Vec3::new(
+                            (min_x + max_x) * 0.5,
+                            (min_y + max_y) * 0.5,
+                            (min_z + max_z) * 0.5,
+                        );
+
+                        let half_extents = Vec3::new(
+                            (max_x - min_x) * 0.5,
+                            (max_y - min_y) * 0.5,
+                            (max_z - min_z) * 0.5,
+                        );
+
+                        // For faces that have zero thickness in one dimension, add a small thickness
+                        const MIN_THICKNESS: f32 = 0.01;
+                        let half_x = if half_extents.x < MIN_THICKNESS {
+                            MIN_THICKNESS
+                        } else {
+                            half_extents.x
+                        };
+                        let half_y = if half_extents.y < MIN_THICKNESS {
+                            MIN_THICKNESS
+                        } else {
+                            half_extents.y
+                        };
+                        let half_z = if half_extents.z < MIN_THICKNESS {
+                            MIN_THICKNESS
+                        } else {
+                            half_extents.z
+                        };
+
+                        // Create cuboid collider
+                        let cuboid = Collider::cuboid(half_x, half_y, half_z);
+
+                        // Add to compound collider (no rotation needed as faces are axis-aligned)
+                        collider_shapes.push((center.into(), Quaternion::default(), cuboid));
+                    }
+                    // Create compound collider from all cuboids
+                    let collider = Collider::compound(collider_shapes);
                     // Check if entity already exists for this chunk face
                     if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
                         if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
@@ -179,6 +230,9 @@ pub fn process_mesh_queue(
                                 chunk_aabb,
                                 LOD(lod),
                                 face,
+                                //Physics
+                                RigidBody::Static, // Static for terrain
+                                collider,
                             ))
                             .id();
                         chunk_ents.0.insert((chunk_pos, face), ent);

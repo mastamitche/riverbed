@@ -1,4 +1,4 @@
-use crate::agents::{PlayerControlled, AABB};
+use crate::agents::PlayerControlled;
 use bevy::{
     log::tracing_subscriber::fmt::format,
     prelude::*,
@@ -14,8 +14,8 @@ impl Plugin for UIPlugin {
         app.add_plugins(EguiPlugin);
         app.insert_resource(CameraSettings {
             fov: 40.0,
-            height: 15.0,
-            x_z_offset: 6.0,
+            height: 30.0,
+            x_z_offset: 10.0,
         })
         .insert_resource(CameraOrbit {
             angle: std::f32::consts::PI / 4.0,
@@ -29,13 +29,13 @@ impl Plugin for UIPlugin {
                 handle_camera_rotation,
                 adjust_camera_angle,
                 //Debug testing
-                // ui_camera_system,
-                // update_camera_projection,
+                ui_camera_system,
+                update_camera_projection,
             ),
         );
     }
 }
-// Add this new resource to track camera orbit state
+
 #[derive(Resource)]
 pub struct CameraOrbit {
     pub angle: f32,            // Current orbital angle (yaw)
@@ -95,10 +95,10 @@ pub fn adjust_camera_angle(
     camera_settings: Res<CameraSettings>,
     camera_orbit: Res<CameraOrbit>,
     mut query: Query<&mut Transform, With<Camera3d>>,
-    player_query: Query<(Entity, &AABB, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
+    player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
 ) {
     let mut camera_transform = query.single_mut();
-    let (_, _, player_transform) = player_query.single();
+    let (_, player_transform) = player_query.single();
 
     let player_pos = player_transform.translation;
 
@@ -116,7 +116,7 @@ pub fn adjust_camera_angle(
 fn ui_camera_system(
     mut contexts: EguiContexts,
     mut camera_settings: ResMut<CameraSettings>,
-    player_query: Query<(Entity, &AABB, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
+    player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
     query: Query<&Transform, With<Camera3d>>,
 ) {
     egui::Window::new("Camera Settings").show(contexts.ctx_mut(), |ui| {
@@ -131,14 +131,14 @@ fn ui_camera_system(
 fn ui_player_system(
     mut contexts: EguiContexts,
     mut camera_settings: ResMut<CameraSettings>,
-    player_query: Query<(Entity, &AABB, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
+    player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
     query: Query<&Transform, With<Camera3d>>,
 ) {
     let player_pos = format!(
         "Player pos: x: {}, y: {}, z: {}",
-        player_query.single().2.translation.x.floor(),
-        player_query.single().2.translation.y.floor(),
-        player_query.single().2.translation.z.floor()
+        player_query.single().1.translation.x.floor(),
+        player_query.single().1.translation.y.floor(),
+        player_query.single().1.translation.z.floor()
     );
     let camera_pos = format!(
         "Camera pos: x: {}, y: {}, z: {}",
