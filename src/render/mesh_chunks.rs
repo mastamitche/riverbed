@@ -247,7 +247,7 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
         }
         Face::Right => {
             // Right
-            vec![[x, y, z], [x, y + h, z], [x, y + h, z + w], [x, y, z + w]]
+            vec![[x, y, z], [x, y - w, z], [x, y - w, z + h], [x, y, z + h]]
         }
         Face::Left => {
             // Left
@@ -255,7 +255,7 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
         }
         Face::Front => {
             // Front
-            vec![[x, y, z], [x - w, y, z], [x - w, y + h, z], [x, y + h, z]]
+            vec![[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z]]
         }
         Face::Back => {
             // Back
@@ -291,12 +291,10 @@ fn get_indices(face: Face, quad_index: u32) -> Vec<u32> {
         Face::Front => vec![base + 0, base + 1, base + 2, base + 0, base + 2, base + 3],
         Face::Back => vec![base + 2, base + 1, base + 0, base + 3, base + 2, base + 0],
         Face::Left => vec![base + 1, base + 0, base + 3, base + 1, base + 3, base + 2],
-        Face::Right => vec![base + 0, base + 1, base + 2, base + 3, base + 0, base + 2],
+        Face::Right => vec![base + 1, base + 0, base + 2, base + 0, base + 3, base + 2],
     }
 }
-pub fn quads_to_indices(quads_len: usize) -> Vec<u32> {
-    bgm::indices(quads_len)
-}
+
 pub fn get_color_from_block(block: &Block, face: &Face) -> [f32; 4] {
     let color_bits = match (block, face) {
         (Block::GrassBlock, Face::Up) => 0b011_111_001,
@@ -309,5 +307,5 @@ pub fn get_color_from_block(block: &Block, face: &Face) -> [f32; 4] {
     let r = ((color_bits >> 6) & 0x7) as f32 / 7.0;
     let g = ((color_bits >> 3) & 0x7) as f32 / 7.0;
     let b = (color_bits & 0x7) as f32 / 7.0;
-    return [r, g, b, 1.0];
+    [r, g, b, 1.0]
 }
