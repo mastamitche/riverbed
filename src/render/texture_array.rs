@@ -131,7 +131,7 @@ impl MaterialExtension for ArrayTextureMaterial {
             Mesh::ATTRIBUTE_COLOR.at_shader_location(color_position),
             Mesh::ATTRIBUTE_UV_0.at_shader_location(uv_position),
             // Mesh::ATTRIBUTE_TANGENT.at_shader_location(4),
-            ATTRIBUTE_QUAD_SIZE.at_shader_location(50),
+            ATTRIBUTE_QUAD_SIZE.at_shader_location(30),
         ])?;
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())

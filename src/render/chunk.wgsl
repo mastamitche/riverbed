@@ -66,7 +66,7 @@ struct Vertex {
 #ifdef MORPH_TARGETS
     @builtin(vertex_index) index: u32,
 #endif
-    @location(50) quad_size: vec2<f32>,
+    @location(30) quad_size: vec2<f32>,
 };
 
 struct CustomVertexOutput {
