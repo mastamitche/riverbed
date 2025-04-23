@@ -39,10 +39,36 @@ const CHUNK_SIZE: i32 = 62;
 const CHUNK_SIZE_M_1: i32 = 61;
 const EPSILON: f32 = 0.001;
 
-struct VertexInput {
+struct Vertex {
     @builtin(instance_index) instance_index: u32,
-    @location(0) voxel_data: vec2<u32>,
+#ifdef VERTEX_POSITIONS
+    @location(0) position: vec3<f32>,
+#endif
+#ifdef VERTEX_NORMALS
+    @location(1) normal: vec3<f32>,
+#endif
+#ifdef VERTEX_UVS
+    @location(2) uv: vec2<f32>,
+#endif
+#ifdef VERTEX_UVS_B
+    @location(3) uv_b: vec2<f32>,
+#endif
+#ifdef VERTEX_TANGENTS
+    @location(4) tangent: vec4<f32>,
+#endif
+#ifdef VERTEX_COLORS
+    @location(5) color: vec4<f32>,
+#endif
+#ifdef SKINNED
+    @location(6) joint_indices: vec4<u32>,
+    @location(7) joint_weights: vec4<f32>,
+#endif
+#ifdef MORPH_TARGETS
+    @builtin(vertex_index) index: u32,
+#endif
+    @location(50) quad_size: vec2<f32>,
 };
+
 struct CustomVertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) world_position: vec4<f32>,
@@ -421,70 +447,74 @@ fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
     // Clamp to ensure valid range
     return clamp(ao_value, 0.3, 1.0);
 }
-
 @vertex
-fn vertex(vertex: VertexInput) -> CustomVertexOutput {
+fn vertex(vertex: Vertex) -> CustomVertexOutput {
     var out: CustomVertexOutput;
-
-    // Vertex specific information
-    var vertex_info = vertex.voxel_data.x;
-    var x = f32(vertex_info & MASK6) - EPSILON;
-    var y = f32((vertex_info >> 6) & MASK6) - EPSILON;
-    var z = f32((vertex_info >> 12) & MASK6) - EPSILON;
-    var position = vec4(x/8., y/8., z/8., 1.0);
     
-    // Quad specific information
-    var quad_info = vertex.voxel_data.y;
-    var n_id = quad_info & MASK3;
-    var normal = normal_from_id(n_id);
-    var c_id = (quad_info >> 3) & MASK9;
-    var face_color = color_from_id(c_id);
-    var h = f32((quad_info >> 18) & MASK6)/8.; // Height is at bits 18-23
-    var w = f32((quad_info >> 24) & MASK6)/8.; // Width is at bits 24-29
+    // Get position directly from the position attribute
+    var position = vec4<f32>(vertex.position, 1.0);
+    
+    // Get normal directly from the normal attribute
+    var normal = vertex.normal;
+    
+    // Get UV coordinates from the uv attribute
+    var uv = vertex.uv;
+    
+    // Get color from the color attribute
+    var face_color = vertex.color;
+    
+    // Determine face normal ID based on the normal
+    var n_id: u32 = 0u;
+    if (abs(normal.y) > 0.5) {
+        n_id = select(1u, 0u, normal.y > 0.0); // 0 for Up, 1 for Down
+    } else if (abs(normal.x) > 0.5) {
+        n_id = select(3u, 2u, normal.x > 0.0); // 2 for Right, 3 for Left
+    } else {
+        n_id = select(5u, 4u, normal.z > 0.0); // 4 for Front, 5 for Back
+    }
+    
+    // Get face light based on normal ID
     var face_light = light_from_id(n_id);
     
+    // Transform position to clip space
     out.position = mesh_position_local_to_clip(
         get_world_from_local(vertex.instance_index),
         position,
     );
+    
+    // Transform position to world space
     out.world_position = mesh_position_local_to_world(
         get_world_from_local(vertex.instance_index),
         position,
     );
+    
     out.world_normal = normal;
-    
-    var uv_x: f32 = 0.0;
-    var uv_y: f32 = 0.0;
-    
-    if (abs(normal.x) > 0.5) {
-        // X-facing normal (YZ plane)
-        // For a quad on the X face, y and z vary
-        uv_x = (position.y % 1.0); // Local position within the starting voxel
-        uv_y = (position.z % 1.0);
-        
-        // Store the base position of the quad in the chunk
-        // This is already done in your code with world_position.w
-    } else if (abs(normal.y) > 0.5) {
-        // Y-facing normal (XZ plane)
-        uv_x = (position.x % 1.0);
-        uv_y = (position.z % 1.0);
-    } else {
-        // Z-facing normal (XY plane)
-        uv_x = (position.x % 1.0);
-        uv_y = (position.y % 1.0);
-    }
-    
-    out.uv = vec2<f32>(uv_x, uv_y);
-    
-    
+    out.uv = uv;
     out.color = face_color;
     out.face_light = face_light;
     out.face_normal = get_face_normal(n_id);
     
-    // Pass quad information needed for fragment shader
-    // Store quad origin and dimensions in world_position.w and face_light.w
+    // For quad dimensions, you'll need to calculate or pass them differently
+    // One approach is to compute the dimensions in the fragment shader based on derivatives
+    // Another is to store them in vertex attributes or a uniform buffer
+    
+    // Store position information in world_position.w for fragment shader use
+    // This is an approximation - you may need to adjust based on your needs
+    var x = floor(position.x * 8.0);
+    var y = floor(position.y * 8.0);
+    var z = floor(position.z * 8.0);
     out.world_position.w = f32(u32(x) | (u32(y) << 10) | (u32(z) << 20));
-    out.wh = vec2(w, h);
+    
+    // For wh, you can either:
+    // 1. Add them as additional vertex attributes
+    // 2. Compute them in the fragment shader using derivatives
+    // 3. Use a uniform buffer to pass them
+    
+    // Option 1: If you've added them as attributes
+    out.wh = vertex.quad_size; // Assuming you've added this attribute
+    
+    // Option 2: Will be calculated in fragment shader using dFdx/dFdy
+    
     return out;
 }
 

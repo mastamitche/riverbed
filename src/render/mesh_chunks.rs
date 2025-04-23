@@ -13,10 +13,13 @@ use bevy::{
         },
     },
 };
-use binary_greedy_meshing as bgm;
+use binary_greedy_meshing::{self as bgm, Quad};
 
 use super::texture_array::TextureMapTrait;
-use crate::world::{linearize, ChunkPos, CHUNKP_S1, CHUNK_S1};
+use crate::{
+    block,
+    world::{linearize, ChunkPos, CHUNKP_S1, CHUNK_S1},
+};
 use crate::{
     block::Face,
     world::{pad_linearize, Chunk, CHUNKP_S3},
@@ -39,8 +42,8 @@ const MASK_XYZ: u64 = 0b111111_111111_111111;
 ///     - light level: 4 bits (16 value)
 ///
 /// `0bllll_iiiiiiiiiiiiiiii_ccccccccc_nnn`
-pub const ATTRIBUTE_VOXEL_DATA: MeshVertexAttribute =
-    MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Uint32x2);
+pub const ATTRIBUTE_QUAD_SIZE: MeshVertexAttribute =
+    MeshVertexAttribute::new("VoxelData", 48757581, VertexFormat::Float32x2);
 
 impl Chunk {
     pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
@@ -60,8 +63,6 @@ impl Chunk {
         res
     }
 
-    /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
-    /// TODO: make it work with lod > 2 if necessary (by truncating quads)
     pub fn create_face_meshes(&self) -> [Option<(Mesh, Vec<[Vec3; 4]>)>; 6] {
         let lod = 1;
         // Gathering binary greedy meshing input data
@@ -82,89 +83,75 @@ impl Chunk {
         let mut meshes = core::array::from_fn(|_| None);
 
         for (face_n, quads) in mesh_data.quads.iter().enumerate() {
-            let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len() * 4);
-            let indices = bgm::indices(quads.len());
+            if quads.is_empty() {
+                continue;
+            }
+
             let face: Face = face_n.into();
+            // Regular mesh data
+            let mut positions = Vec::with_capacity(quads.len() * 4);
+            let mut normals = Vec::with_capacity(quads.len() * 4);
+            let mut uvs = Vec::with_capacity(quads.len() * 4);
+            let mut colors = Vec::with_capacity(quads.len() * 4);
+            let mut quad_sizes = Vec::with_capacity(quads.len() * 4);
 
             // Collect physics quad data
             let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
 
             for quad in quads {
-                let (first, second, third) = *quad;
-                // Extract components based on our packing scheme
-                let xyz = first & MASK_XYZ as u32;
-                let w = second & MASK_6 as u32;
-                let h = (second >> 8) & MASK_6 as u32;
-                let voxel_i = third as usize;
-
+                let quad = *quad;
+                let voxel_i = quad.v_type as usize;
                 let block = self.palette[voxel_i];
 
-                let color = match (block, face) {
-                    (Block::GrassBlock, Face::Up) => 0b011_111_001,
-                    (Block::SeaBlock, _) => 0b110_011_001,
-                    (block, _) if block.is_foliage() => 0b010_101_001,
-                    _ => 0b111_111_111,
-                };
+                // Get mesh data for this quad
+                let quad_mesh_data = quad_to_mesh_data(quad, block, face_n);
 
-                // Get vertices for rendering
-                let vertices = face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
-                let quad_info = (w << 24) | (h << 18) | (color << 3) | face_n as u32;
-                voxel_data.extend_from_slice(&[
-                    [vertices[0], quad_info],
-                    [vertices[1], quad_info],
-                    [vertices[2], quad_info],
-                    [vertices[3], quad_info],
-                ]);
+                // Add vertices to mesh data
+                for i in 0..4 {
+                    positions.push(quad_mesh_data.positions[i]);
+                    normals.push(quad_mesh_data.normals[i]);
+                    uvs.push(quad_mesh_data.uvs[i]);
+                    colors.push(quad_mesh_data.colors[i]);
+                    quad_sizes.push([quad_mesh_data.quad_sizes[0], quad_mesh_data.quad_sizes[1]]);
+                }
 
-                // Create physics quad vertices (Vec3 positions)
-                // Decode the packed vertices to get actual positions
-                let x = (xyz & 0x3F) as f32 / 8.0;
-                let y = ((xyz >> 6) & 0x3F) as f32 / 8.0;
-                let z = ((xyz >> 12) & 0x3F) as f32 / 8.0;
-                let width = w as f32 / 8.0;
-                let height = h as f32 / 8.0;
-
-                // Create physics vertices based on face orientation
-                let physics_verts = match face {
-                    Face::Up | Face::Down => {
-                        let y_val = if face == Face::Up { y } else { y - height };
-                        [
-                            Vec3::new(x, y_val, z),
-                            Vec3::new(x + width, y_val, z),
-                            Vec3::new(x + width, y_val, z + height),
-                            Vec3::new(x, y_val, z + height),
-                        ]
-                    }
-                    Face::Left | Face::Right => {
-                        let x_val = if face == Face::Right { x + width } else { x };
-                        [
-                            Vec3::new(x_val, y, z),
-                            Vec3::new(x_val, y, z + height),
-                            Vec3::new(x_val, y + width, z + height),
-                            Vec3::new(x_val, y + width, z),
-                        ]
-                    }
-                    Face::Front | Face::Back => {
-                        let z_val = if face == Face::Front { z + height } else { z };
-                        [
-                            Vec3::new(x, y, z_val),
-                            Vec3::new(x + width, y, z_val),
-                            Vec3::new(x + width, y + height, z_val),
-                            Vec3::new(x, y + height, z_val),
-                        ]
-                    }
-                };
-
+                // Create physics quad vertices for collision detection
+                let physics_verts = [
+                    Vec3::new(
+                        quad_mesh_data.positions[0][0],
+                        quad_mesh_data.positions[0][1],
+                        quad_mesh_data.positions[0][2],
+                    ),
+                    Vec3::new(
+                        quad_mesh_data.positions[1][0],
+                        quad_mesh_data.positions[1][1],
+                        quad_mesh_data.positions[1][2],
+                    ),
+                    Vec3::new(
+                        quad_mesh_data.positions[2][0],
+                        quad_mesh_data.positions[2][1],
+                        quad_mesh_data.positions[2][2],
+                    ),
+                    Vec3::new(
+                        quad_mesh_data.positions[3][0],
+                        quad_mesh_data.positions[3][1],
+                        quad_mesh_data.positions[3][2],
+                    ),
+                ];
                 physics_quads.push(physics_verts);
             }
 
-            // Create the render mesh
-            let render_mesh = Mesh::new(
+            // Create the render mesh with standard attributes
+            let mut render_mesh = Mesh::new(
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::RENDER_WORLD,
-            )
-            .with_inserted_attribute(ATTRIBUTE_VOXEL_DATA, voxel_data)
-            .with_inserted_indices(Indices::U32(indices));
+            );
+            render_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+            render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+            render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+            render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+            render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, quad_sizes);
+            render_mesh.insert_indices(Indices::U32(quads_to_indices(quads.len())));
 
             meshes[face_n] = Some((render_mesh, physics_quads));
         }
@@ -217,4 +204,103 @@ impl Chunk {
             RenderAssetUsages::RENDER_WORLD,
         )
     }
+}
+pub struct QuadMeshData {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    colors: Vec<[f32; 4]>,
+    quad_sizes: [f32; 2],
+}
+pub fn quad_to_mesh_data(quad: Quad, block: Block, face: usize) -> QuadMeshData {
+    // Extract components
+    let x = (quad.x as f32) / 8.0;
+    let y = (quad.y as f32) / 8.0;
+    let z = (quad.z as f32) / 8.0;
+    let w = (quad.w as f32) / 8.0;
+    let h = (quad.h as f32) / 8.0;
+
+    // Get normal for this face
+    let normal = match face {
+        0 => [0.0, 1.0, 0.0],  // Up
+        1 => [0.0, -1.0, 0.0], // Down
+        2 => [1.0, 0.0, 0.0],  // Right
+        3 => [-1.0, 0.0, 0.0], // Left
+        4 => [0.0, 0.0, 1.0],  // Front
+        5 => [0.0, 0.0, -1.0], // Back
+        _ => [0.0, 0.0, 0.0],  // Shouldn't happen
+    };
+
+    // Generate positions based on face orientation
+    let positions = match face {
+        0 => {
+            // Up
+            vec![[x, y, z], [x, y, z + h], [x + w, y, z + h], [x + w, y, z]]
+        }
+        1 => {
+            // Down
+            vec![[x, y, z], [x + w, y, z], [x + w, y, z + h], [x, y, z + h]]
+        }
+        2 => {
+            // Right
+            vec![[x, y, z], [x, y + h, z], [x, y + h, z + w], [x, y, z + w]]
+        }
+        3 => {
+            // Left
+            vec![[x, y, z], [x, y, z + w], [x, y + h, z + w], [x, y + h, z]]
+        }
+        4 => {
+            // Front
+            vec![[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z]]
+        }
+        5 => {
+            // Back
+            vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
+        }
+        _ => vec![[0.0, 0.0, 0.0]; 4],
+    };
+
+    // Generate UVs (simple 0-1 mapping)
+    let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+
+    // Generate normals (same for all vertices of the quad)
+    let normals = vec![normal; 4];
+    let face: Face = face.into();
+    let colors = vec![get_color_from_block(&block, &face); 4];
+    let w = match face {
+        Face::Up | Face::Down => w,
+        Face::Right | Face::Left | Face::Front | Face::Back => h,
+        _ => h,
+    };
+    let h = match face {
+        Face::Up | Face::Down => h,
+        Face::Right | Face::Left | Face::Front | Face::Back => w,
+        _ => w,
+    };
+
+    QuadMeshData {
+        positions,
+        normals,
+        uvs,
+        colors,
+        quad_sizes: [w, h],
+    }
+}
+
+pub fn quads_to_indices(quads_len: usize) -> Vec<u32> {
+    bgm::indices(quads_len)
+}
+pub fn get_color_from_block(block: &Block, face: &Face) -> [f32; 4] {
+    let color_bits = match (block, face) {
+        (Block::GrassBlock, Face::Up) => 0b011_111_001,
+        (Block::SeaBlock, _) => 0b110_011_001,
+        (block, _) if block.is_foliage() => 0b010_101_001,
+        _ => 0b111_111_111,
+    };
+
+    // Convert color bits to RGB float values
+    let r = ((color_bits >> 6) & 0x7) as f32 / 7.0;
+    let g = ((color_bits >> 3) & 0x7) as f32 / 7.0;
+    let b = (color_bits & 0x7) as f32 / 7.0;
+    return [r, g, b, 1.0];
 }

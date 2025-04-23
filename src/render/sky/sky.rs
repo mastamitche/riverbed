@@ -1,8 +1,5 @@
 use crate::render::camera::CameraSpawn;
-use bevy::{
-    pbr::{light_consts::lux::OVERCAST_DAY, VolumetricLight},
-    prelude::*,
-};
+use bevy::{pbr::light_consts::lux::OVERCAST_DAY, prelude::*};
 use bevy_atmosphere::prelude::{AtmosphereCamera, AtmosphereModel, AtmospherePlugin, Nishita};
 use std::f32::consts::PI;
 const DAY_LENGTH_MINUTES: f32 = 0.2;
@@ -25,7 +22,7 @@ fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<Camera3d>>) {
             illuminance: OVERCAST_DAY,
             // Cant do shadows for now
             // Get errors with custom pipeline
-            // shadows_enabled: true,
+            shadows_enabled: true,
             ..Default::default()
         },
     ));

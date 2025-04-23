@@ -1,5 +1,6 @@
 use crate::agents::PlayerControlled;
 use bevy::{
+    input::mouse::MouseWheel,
     log::tracing_subscriber::fmt::format,
     prelude::*,
     render::camera::ScalingMode,
@@ -7,7 +8,7 @@ use bevy::{
 };
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
-const Y_CAM_SPEED: f32 = 10.;
+const Y_CAM_SPEED: f32 = 20.;
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
@@ -30,6 +31,7 @@ impl Plugin for UIPlugin {
                 // ui_player_system,
                 handle_camera_rotation,
                 adjust_camera_angle,
+                handle_camera_zoom,
                 //Debug testing
                 // ui_camera_system,
                 // update_camera_projection,
@@ -246,18 +248,21 @@ fn update_camera_projection(
         });
     }
 }
-fn grab_cursor(mut windows: Query<&mut Window>) {
-    let Ok(mut window) = windows.get_single_mut() else {
+fn handle_camera_zoom(
+    mut camera_settings: ResMut<CameraSettings>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+) {
+    // Skip zoom if right mouse button is pressed (to avoid conflict with rotation)
+    if mouse_button_input.pressed(MouseButton::Right) {
         return;
-    };
-    window.cursor_options.visible = false;
-    window.cursor_options.grab_mode = CursorGrabMode::Confined;
-}
+    }
 
-fn free_cursor(mut windows: Query<&mut Window>) {
-    let Ok(mut window) = windows.get_single_mut() else {
-        return;
-    };
-    window.cursor_options.visible = true;
-    window.cursor_options.grab_mode = CursorGrabMode::None;
+    // Process all scroll events
+    for event in mouse_wheel_events.read() {
+        let zoom_speed = 6.;
+        let zoom_delta = event.y * zoom_speed;
+
+        camera_settings.height = (camera_settings.height - zoom_delta).clamp(5.0, 40.0);
+    }
 }
