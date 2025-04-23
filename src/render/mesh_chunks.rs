@@ -89,20 +89,22 @@ impl Chunk {
             // Regular mesh data
             let mut positions = Vec::with_capacity(quads.len() * 4);
             let mut normals = Vec::with_capacity(quads.len() * 4);
+            let mut indicies = Vec::with_capacity(quads.len() * 6);
             let mut uvs = Vec::with_capacity(quads.len() * 4);
             let mut colors = Vec::with_capacity(quads.len() * 4);
             let mut quad_sizes = Vec::with_capacity(quads.len() * 4);
 
             // Collect physics quad data
             let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
-
+            let mut i = 0;
             for quad in quads {
+                i += 1;
                 let quad = *quad;
                 let voxel_i = quad.v_type as usize;
                 let block = self.palette[voxel_i];
 
                 // Get mesh data for this quad
-                let quad_mesh_data = quad_to_mesh_data(quad, block, face_n);
+                let quad_mesh_data = quad_to_mesh_data(quad, block, face_n, i);
 
                 // Add vertices to mesh data
                 for i in 0..4 {
@@ -111,6 +113,9 @@ impl Chunk {
                     uvs.push(quad_mesh_data.uvs[i]);
                     colors.push(quad_mesh_data.colors[i]);
                     quad_sizes.push(quad_mesh_data.quad_sizes);
+                }
+                for i in 0..6 {
+                    indicies.push(quad_mesh_data.indicies[i]);
                 }
 
                 // Create physics quad vertices for collision detection
@@ -149,7 +154,7 @@ impl Chunk {
             render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
             render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
             render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, quad_sizes);
-            render_mesh.insert_indices(Indices::U32(quads_to_indices(quads.len())));
+            render_mesh.insert_indices(Indices::U32(indicies));
 
             meshes[face_n] = Some((render_mesh, physics_quads));
         }
@@ -211,7 +216,7 @@ pub struct QuadMeshData {
     colors: Vec<[f32; 4]>,
     quad_sizes: [f32; 2],
 }
-pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize) -> QuadMeshData {
+pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u32) -> QuadMeshData {
     // Extract components
     let x = (quad.x as f32) / 8.0;
     let y = (quad.y as f32) / 8.0;
@@ -258,7 +263,7 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize) -> QuadMeshDat
         }
         _ => vec![[0.0, 0.0, 0.0]; 4],
     };
-    let indicies: Vec<u32> = get_indices(face, face_n as u32);
+    let indicies: Vec<u32> = get_indices(face, quad_index);
 
     // Generate UVs (simple 0-1 mapping)
     let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
