@@ -238,27 +238,21 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
     // Generate positions based on face orientation
     let positions = match face {
         Face::Up => {
-            // Up
             vec![[x, y, z], [x, y, z + h], [x + w, y, z + h], [x + w, y, z]]
         }
         Face::Down => {
-            // Down
             vec![[x, y, z], [x + w, y, z], [x + w, y, z + h], [x, y, z + h]]
         }
         Face::Right => {
-            // Right
             vec![[x, y, z], [x, y - w, z], [x, y - w, z + h], [x, y, z + h]]
         }
         Face::Left => {
-            // Left
-            vec![[x, y, z], [x, y, z + w], [x, y + h, z + w], [x, y + h, z]]
+            vec![[x, y, z], [x, y, z + h], [x, y + w, z + h], [x, y + w, z]]
         }
         Face::Front => {
-            // Front
-            vec![[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z]]
+            vec![[x, y, z], [x - w, y, z], [x - w, y + h, z], [x, y + h, z]]
         }
         Face::Back => {
-            // Back
             vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
         }
         _ => vec![[0.0, 0.0, 0.0]; 4],
@@ -288,9 +282,9 @@ fn get_indices(face: Face, quad_index: u32) -> Vec<u32> {
     match face {
         Face::Up => vec![base + 2, base + 0, base + 1, base + 2, base + 3, base + 0],
         Face::Down => vec![base + 0, base + 2, base + 1, base + 0, base + 3, base + 2],
-        Face::Front => vec![base + 0, base + 1, base + 2, base + 0, base + 2, base + 3],
+        Face::Front => vec![base + 1, base + 0, base + 2, base + 2, base + 0, base + 3],
         Face::Back => vec![base + 2, base + 1, base + 0, base + 3, base + 2, base + 0],
-        Face::Left => vec![base + 1, base + 0, base + 3, base + 1, base + 3, base + 2],
+        Face::Left => vec![base + 0, base + 1, base + 3, base + 3, base + 1, base + 2],
         Face::Right => vec![base + 1, base + 0, base + 2, base + 0, base + 3, base + 2],
     }
 }
