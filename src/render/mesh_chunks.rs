@@ -86,8 +86,6 @@ impl Chunk {
             if quads.is_empty() {
                 continue;
             }
-
-            let face: Face = face_n.into();
             // Regular mesh data
             let mut positions = Vec::with_capacity(quads.len() * 4);
             let mut normals = Vec::with_capacity(quads.len() * 4);
@@ -112,7 +110,7 @@ impl Chunk {
                     normals.push(quad_mesh_data.normals[i]);
                     uvs.push(quad_mesh_data.uvs[i]);
                     colors.push(quad_mesh_data.colors[i]);
-                    quad_sizes.push([quad_mesh_data.quad_sizes[0], quad_mesh_data.quad_sizes[1]]);
+                    quad_sizes.push(quad_mesh_data.quad_sizes);
                 }
 
                 // Create physics quad vertices for collision detection
@@ -208,85 +206,89 @@ impl Chunk {
 pub struct QuadMeshData {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
+    indicies: Vec<u32>,
     uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
     quad_sizes: [f32; 2],
 }
-pub fn quad_to_mesh_data(quad: Quad, block: Block, face: usize) -> QuadMeshData {
+pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize) -> QuadMeshData {
     // Extract components
     let x = (quad.x as f32) / 8.0;
     let y = (quad.y as f32) / 8.0;
     let z = (quad.z as f32) / 8.0;
     let w = (quad.w as f32) / 8.0;
     let h = (quad.h as f32) / 8.0;
+    let face: Face = face_n.into();
 
-    // Get normal for this face
     let normal = match face {
-        0 => [0.0, 1.0, 0.0],  // Up
-        1 => [0.0, -1.0, 0.0], // Down
-        2 => [1.0, 0.0, 0.0],  // Right
-        3 => [-1.0, 0.0, 0.0], // Left
-        4 => [0.0, 0.0, 1.0],  // Front
-        5 => [0.0, 0.0, -1.0], // Back
-        _ => [0.0, 0.0, 0.0],  // Shouldn't happen
+        Face::Up => [0.0, 1.0, 0.0],    // Up
+        Face::Down => [0.0, -1.0, 0.0], // Down
+        Face::Right => [1.0, 0.0, 0.0], // Right
+        Face::Left => [-1.0, 0.0, 0.0], // Left
+        Face::Front => [0.0, 0.0, 1.0], // Front
+        Face::Back => [0.0, 0.0, -1.0], // Back
+        _ => [0.0, 0.0, 0.0],           // Shouldn't happen
     };
 
     // Generate positions based on face orientation
     let positions = match face {
-        0 => {
+        Face::Up => {
             // Up
             vec![[x, y, z], [x, y, z + h], [x + w, y, z + h], [x + w, y, z]]
         }
-        1 => {
+        Face::Down => {
             // Down
             vec![[x, y, z], [x + w, y, z], [x + w, y, z + h], [x, y, z + h]]
         }
-        2 => {
+        Face::Right => {
             // Right
             vec![[x, y, z], [x, y + h, z], [x, y + h, z + w], [x, y, z + w]]
         }
-        3 => {
+        Face::Left => {
             // Left
             vec![[x, y, z], [x, y, z + w], [x, y + h, z + w], [x, y + h, z]]
         }
-        4 => {
+        Face::Front => {
             // Front
-            vec![[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z]]
+            vec![[x, y, z], [x - w, y, z], [x - w, y + h, z], [x, y + h, z]]
         }
-        5 => {
+        Face::Back => {
             // Back
             vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
         }
         _ => vec![[0.0, 0.0, 0.0]; 4],
     };
+    let indicies: Vec<u32> = get_indices(face, face_n as u32);
 
     // Generate UVs (simple 0-1 mapping)
     let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 
     // Generate normals (same for all vertices of the quad)
     let normals = vec![normal; 4];
-    let face: Face = face.into();
     let colors = vec![get_color_from_block(&block, &face); 4];
-    let w = match face {
-        Face::Up | Face::Down => w,
-        Face::Right | Face::Left | Face::Front | Face::Back => h,
-        _ => h,
-    };
-    let h = match face {
-        Face::Up | Face::Down => h,
-        Face::Right | Face::Left | Face::Front | Face::Back => w,
-        _ => w,
-    };
 
     QuadMeshData {
         positions,
         normals,
+        indicies,
         uvs,
         colors,
         quad_sizes: [w, h],
     }
 }
 
+fn get_indices(face: Face, quad_index: u32) -> Vec<u32> {
+    let base = quad_index << 2; // Multiply by 4 to get the base vertex index
+
+    match face {
+        Face::Up => vec![base + 2, base + 0, base + 1, base + 2, base + 3, base + 0],
+        Face::Down => vec![base + 0, base + 2, base + 1, base + 0, base + 3, base + 2],
+        Face::Front => vec![base + 0, base + 1, base + 2, base + 0, base + 2, base + 3],
+        Face::Back => vec![base + 2, base + 1, base + 0, base + 3, base + 2, base + 0],
+        Face::Left => vec![base + 1, base + 0, base + 3, base + 1, base + 3, base + 2],
+        Face::Right => vec![base + 0, base + 1, base + 2, base + 3, base + 0, base + 2],
+    }
+}
 pub fn quads_to_indices(quads_len: usize) -> Vec<u32> {
     bgm::indices(quads_len)
 }
