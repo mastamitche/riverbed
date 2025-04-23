@@ -27,7 +27,7 @@ bevy = { version = "0.15.2" ,default-features = true, features = [
 ]  }
 bevy_dev_tools = "0.15.0"
 bevy_atmosphere = "*"
-binary-greedy-meshing = "*"
+binary-greedy-meshing = { path = "crates/binary-greedy-meshing", version = "*" }
 leafwing-input-manager = "*"
 indexmap = "*"
 itertools = "*"
