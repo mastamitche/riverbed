@@ -1,5 +1,8 @@
 use crate::agents::PlayerSpawn;
-use bevy::prelude::*;
+use bevy::{
+    core_pipeline::experimental::taa::TemporalAntiAliasing, pbr::ScreenSpaceAmbientOcclusion,
+    prelude::*,
+};
 use leafwing_input_manager::prelude::*;
 
 pub struct Camera3dPlugin;
@@ -48,7 +51,9 @@ pub fn cam_setup(mut commands: Commands) {
                 fov: initial_angle,
                 ..Default::default()
             }),
-            Msaa::Sample4,
+            Msaa::Off,
+            ScreenSpaceAmbientOcclusion::default(),
+            TemporalAntiAliasing::default(),
         ))
         .insert(InputManagerBundle::<CameraMovement> {
             input_map,

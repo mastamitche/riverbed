@@ -24,22 +24,20 @@ use crate::sounds;
 use crate::ui;
 use crate::world;
 
-const SEED: u64 = 42;
-
 pub fn create_app() {
     let mut app = App::new();
     // #[cfg(not(feature = "web"))]
-    // app.add_plugins(FpsOverlayPlugin {
-    //     config: FpsOverlayConfig {
-    //         text_config: TextFont {
-    //             font_size: 15.0,
-    //             font: default(),
-    //             font_smoothing: FontSmoothing::default(),
-    //         },
-    //         text_color: Color::WHITE,
-    //         enabled: true,
-    //     },
-    // });
+    app.add_plugins(FpsOverlayPlugin {
+        config: FpsOverlayConfig {
+            text_config: TextFont {
+                font_size: 15.0,
+                font: default(),
+                font_smoothing: FontSmoothing::default(),
+            },
+            text_color: Color::WHITE,
+            enabled: true,
+        },
+    });
     app.insert_resource(VoxelWorld::new())
         .insert_resource(Gravity(Vec3::NEG_Y * 19.6))
         .add_plugins((
@@ -83,5 +81,6 @@ pub fn create_app() {
         .add_plugins(GenPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin)
+        .add_plugins(TemporalAntiAliasPlugin)
         .run();
 }
