@@ -77,7 +77,7 @@ fn build_tex_array(
         base: StandardMaterial {
             perceptual_roughness: 1.,
             reflectance: 0.1,
-            alpha_mode: AlphaMode::AlphaToCoverage,
+            unlit: false,
             ..Default::default()
         },
         extension: ArrayTextureMaterial {
@@ -98,42 +98,42 @@ pub struct ArrayTextureMaterial {
 }
 
 impl MaterialExtension for ArrayTextureMaterial {
-    fn vertex_shader() -> ShaderRef {
-        CHUNK_MATERIAL_SHADER.into()
-    }
+    // fn vertex_shader() -> ShaderRef {
+    //     CHUNK_MATERIAL_SHADER.into()
+    // }
 
     fn fragment_shader() -> ShaderRef {
         CHUNK_MATERIAL_SHADER.into()
     }
 
-    fn specialize(
-        _pipeline: &MaterialExtensionPipeline,
-        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
-        layout: &MeshVertexBufferLayoutRef,
-        _key: MaterialExtensionKey<ArrayTextureMaterial>,
-    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
-        let mut pos_position = 0;
-        let mut normal_position = 1;
-        let mut color_position = 5;
-        let mut uv_position = 2;
-        if let Some(label) = &mut descriptor.label {
-            // println!("Label is: {}", label);
-            if label == "pbr_prepass_pipeline" {
-                pos_position = 0;
-                uv_position = 1;
-                normal_position = 3;
-                color_position = 7;
-            }
-        }
-        let vertex_layout = layout.0.get_layout(&[
-            Mesh::ATTRIBUTE_POSITION.at_shader_location(pos_position),
-            Mesh::ATTRIBUTE_NORMAL.at_shader_location(normal_position),
-            Mesh::ATTRIBUTE_COLOR.at_shader_location(color_position),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(uv_position),
-            // Mesh::ATTRIBUTE_TANGENT.at_shader_location(4),
-            ATTRIBUTE_QUAD_SIZE.at_shader_location(30),
-        ])?;
-        descriptor.vertex.buffers = vec![vertex_layout];
-        Ok(())
-    }
+    // fn specialize(
+    //     _pipeline: &MaterialExtensionPipeline,
+    //     descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+    //     layout: &MeshVertexBufferLayoutRef,
+    //     _key: MaterialExtensionKey<ArrayTextureMaterial>,
+    // ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+    //     let mut pos_position = 0;
+    //     let mut normal_position = 1;
+    //     let mut color_position = 5;
+    //     let mut uv_position = 2;
+    //     if let Some(label) = &mut descriptor.label {
+    //         // println!("Label is: {}", label);
+    //         if label == "pbr_prepass_pipeline" {
+    //             pos_position = 0;
+    //             uv_position = 1;
+    //             normal_position = 3;
+    //             color_position = 7;
+    //         }
+    //     }
+    //     let vertex_layout = layout.0.get_layout(&[
+    //         Mesh::ATTRIBUTE_POSITION.at_shader_location(pos_position),
+    //         Mesh::ATTRIBUTE_NORMAL.at_shader_location(normal_position),
+    //         Mesh::ATTRIBUTE_COLOR.at_shader_location(color_position),
+    //         Mesh::ATTRIBUTE_UV_0.at_shader_location(uv_position),
+    //         // Mesh::ATTRIBUTE_TANGENT.at_shader_location(4),
+    //         ATTRIBUTE_QUAD_SIZE.at_shader_location(30),
+    //     ])?;
+    //     descriptor.vertex.buffers = vec![vertex_layout];
+    //     Ok(())
+    // }
 }

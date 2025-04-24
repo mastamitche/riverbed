@@ -1,23 +1,28 @@
+
 #import bevy_pbr::{
-    pbr_fragment::pbr_input_from_standard_material,
+    pbr_types,
     mesh_view_bindings::{view, globals},
+    pbr_functions::alpha_discard,
+    pbr_fragment::pbr_input_from_standard_material,
     pbr_types::{STANDARD_MATERIAL_FLAGS_DOUBLE_SIDED_BIT, STANDARD_MATERIAL_FLAGS_ALPHA_MODE_BLEND, PbrInput, pbr_input_new},
-    pbr_functions as fns,
     mesh_functions::{get_world_from_local, mesh_position_local_to_clip, mesh_position_local_to_world},
 }
-#import bevy_core_pipeline::tonemapping::tone_mapping
 
 #ifdef PREPASS_PIPELINE
 #import bevy_pbr::{
-    prepass_io::{VertexOutput, FragmentOutput},
+    prepass_io::{VertexOutput,Vertex, FragmentOutput},
     pbr_deferred_functions::deferred_output,
 }
 #else
 #import bevy_pbr::{
-    forward_io::{VertexOutput, FragmentOutput},
+    forward_io::{VertexOutput,Vertex, FragmentOutput},
+    pbr_functions,
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
 }
 #endif
+
+#import bevy_core_pipeline::tonemapping::tone_mapping
 
 @group(2) @binding(100)
 var ao_texture_data: texture_3d<u32>;
@@ -39,35 +44,35 @@ const CHUNK_SIZE: i32 = 62;
 const CHUNK_SIZE_M_1: i32 = 61;
 const EPSILON: f32 = 0.001;
 
-struct Vertex {
-    @builtin(instance_index) instance_index: u32,
-#ifdef VERTEX_POSITIONS
-    @location(0) position: vec3<f32>,
-#endif
-#ifdef VERTEX_NORMALS
-    @location(1) normal: vec3<f32>,
-#endif
-#ifdef VERTEX_UVS
-    @location(2) uv: vec2<f32>,
-#endif
-#ifdef VERTEX_UVS_B
-    @location(3) uv_b: vec2<f32>,
-#endif
-#ifdef VERTEX_TANGENTS
-    @location(4) tangent: vec4<f32>,
-#endif
-#ifdef VERTEX_COLORS
-    @location(5) color: vec4<f32>,
-#endif
-#ifdef SKINNED
-    @location(6) joint_indices: vec4<u32>,
-    @location(7) joint_weights: vec4<f32>,
-#endif
-#ifdef MORPH_TARGETS
-    @builtin(vertex_index) index: u32,
-#endif
-    @location(30) quad_size: vec2<f32>,
-};
+// struct Vertex {
+//     @builtin(instance_index) instance_index: u32,
+// #ifdef VERTEX_POSITIONS
+//     @location(0) position: vec3<f32>,
+// #endif
+// #ifdef VERTEX_NORMALS
+//     @location(1) normal: vec3<f32>,
+// #endif
+// #ifdef VERTEX_UVS
+//     @location(2) uv: vec2<f32>,
+// #endif
+// #ifdef VERTEX_UVS_B
+//     @location(3) uv_b: vec2<f32>,
+// #endif
+// #ifdef VERTEX_TANGENTS
+//     @location(4) tangent: vec4<f32>,
+// #endif
+// #ifdef VERTEX_COLORS
+//     @location(5) color: vec4<f32>,
+// #endif
+// #ifdef SKINNED
+//     @location(6) joint_indices: vec4<u32>,
+//     @location(7) joint_weights: vec4<f32>,
+// #endif
+// #ifdef MORPH_TARGETS
+//     @builtin(vertex_index) index: u32,
+// #endif
+//     @location(30) quad_size: vec2<f32>,
+// };
 
 struct CustomVertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -76,8 +81,8 @@ struct CustomVertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) color: vec4<f32>,
     @location(4) face_light: vec4<f32>,
-    @location(5) wh: vec2<f32>,
     @location(6) face_normal: vec3<i32>,    
+    @location(7) instance_index: u32,
 };
 fn positive_modulo(a: i32, b: i32) -> i32 {
     return ((a % b) + b) % b;
@@ -504,16 +509,7 @@ fn vertex(vertex: Vertex) -> CustomVertexOutput {
     var y = floor(position.y * 8.0);
     var z = floor(position.z * 8.0);
     out.world_position.w = f32(u32(x) | (u32(y) << 10) | (u32(z) << 20));
-    
-    // For wh, you can either:
-    // 1. Add them as additional vertex attributes
-    // 2. Compute them in the fragment shader using derivatives
-    // 3. Use a uniform buffer to pass them
-    
-    // Option 1: If you've added them as attributes
-    out.wh = vertex.quad_size; // Assuming you've added this attribute
-    
-    // Option 2: Will be calculated in fragment shader using dFdx/dFdy
+    out.instance_index = vertex.instance_index;
     
     return out;
 }
@@ -521,50 +517,47 @@ fn vertex(vertex: Vertex) -> CustomVertexOutput {
 
 @fragment
 fn fragment(
-    in: CustomVertexOutput,
+    in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    var vertex_output: VertexOutput;
-    vertex_output.position = in.position;
-    vertex_output.world_position = in.world_position;
-    vertex_output.world_normal = in.world_normal;
-#ifdef VERTEX_UVS
-    vertex_output.uv = in.uv;
-#endif
-#ifdef VERTEX_UVS_B
-    vertex_output.uv_b = in.uv;
-#endif
-#ifdef VERTEX_COLORS
-    vertex_output.color = in.color;
-#endif
+//     var vertex_output: VertexOutput;
+//     vertex_output.position = in.position;
+//     vertex_output.world_position = in.world_position;
+//     vertex_output.world_normal = in.world_normal;
+//     vertex_output.uv = in.uv;
+//     vertex_output.color = in.color;
+//     vertex_output.instance_index = in.instance_index;
+// #ifdef PREPASS_PIPELINE
+//     vertex_output.normal = in.face_normal;
+// #endif
     // generate a PbrInput struct from the StandardMaterial bindings
-    var pbr_input = pbr_input_from_standard_material(vertex_output, is_front);
-    
-    // // sample texture and apply lighting
-    pbr_input.material.base_color = in.color * in.face_light;
-    
-    // // alpha discard
-    pbr_input.material.base_color = fns::alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    var pbr_input = pbr_input_from_standard_material(in, is_front);
+
+    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
 
 
 #ifdef PREPASS_PIPELINE
+
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
     var out = deferred_output(in, pbr_input);
-    out.normal = in.normal;
-    // Set depth value for SSAO
-    out.depth = in.position.z;
-    return out;
+    // out.normal = in.normal;
+    // // Set depth value for SSAO
+    // out.depth = in.position.z;
 #else
     var out: FragmentOutput;
     // apply lighting
-    out.color = apply_pbr_lighting(pbr_input);
+    if (pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
+        out.color = apply_pbr_lighting(pbr_input);
+    } else {
+        out.color = pbr_input.material.base_color;
+    }
 
     // // // apply in-shader post processing
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     // let neighbor_count = count_ao_neighbors(in.world_position.xyz, in.face_normal);
     // let debug_color = get_debug_color(neighbor_count);
-    let ao = calc_ao(in.world_position.xyz, in.face_normal);
-    out.color = vec4<f32>(out.color.r*ao,out.color.g*ao,out.color.b*ao, 1.0);
+    let ao = calc_ao(in.world_position.xyz, vec3<i32>(in.world_normal));
+    out.color = vec4<f32>(out.color.r*ao,out.color.g*ao,out.color.b*ao, out.color.a);
    
 #endif
 

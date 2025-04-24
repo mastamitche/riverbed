@@ -153,7 +153,7 @@ impl Chunk {
             render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
             render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
             render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-            render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, quad_sizes);
+            // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, quad_sizes);
             render_mesh.insert_indices(Indices::U32(indicies));
 
             meshes[face_n] = Some((render_mesh, physics_quads));
@@ -253,6 +253,7 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
             vec![[x, y, z], [x - w, y, z], [x - w, y + h, z], [x, y + h, z]]
         }
         Face::Back => {
+            //To fix
             vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
         }
         _ => vec![[0.0, 0.0, 0.0]; 4],
@@ -283,7 +284,7 @@ fn get_indices(face: Face, quad_index: u32) -> Vec<u32> {
         Face::Up => vec![base + 2, base + 0, base + 1, base + 2, base + 3, base + 0],
         Face::Down => vec![base + 0, base + 2, base + 1, base + 0, base + 3, base + 2],
         Face::Front => vec![base + 1, base + 0, base + 2, base + 2, base + 0, base + 3],
-        Face::Back => vec![base + 2, base + 1, base + 0, base + 3, base + 2, base + 0],
+        Face::Back => vec![base + 1, base + 2, base + 0, base + 2, base + 3, base + 0],
         Face::Left => vec![base + 0, base + 1, base + 3, base + 3, base + 1, base + 2],
         Face::Right => vec![base + 1, base + 0, base + 2, base + 0, base + 3, base + 2],
     }

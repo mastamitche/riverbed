@@ -1,19 +1,23 @@
-use std::sync::atomic::{AtomicU32, Ordering};
-use bevy::{
-    ecs::{query::{Changed, With}, system::Query}, 
-    math::{I64Vec3, Vec3A}, render::{camera::Camera, primitives::{Aabb, Frustum, Sphere}, 
-    view::{NoFrustumCulling, Visibility}}, 
-    transform::components::{GlobalTransform, Transform}
-};
-use crate::world::chunk_pos;
 use crate::block::Face;
+use crate::world::chunk_pos;
+use bevy::{
+    ecs::{
+        query::{Changed, With},
+        system::Query,
+    },
+    math::{I64Vec3, Vec3A},
+    render::{
+        camera::Camera,
+        primitives::{Aabb, Frustum, Sphere},
+        view::{NoFrustumCulling, Visibility},
+    },
+    transform::components::{GlobalTransform, Transform},
+};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 pub fn chunk_culling(
     view_query: Query<(&Frustum, &Camera, &GlobalTransform), Changed<Frustum>>,
-    mut chunk_query: Query<
-        (&mut Visibility, &Transform, &Face, &Aabb),
-        With<NoFrustumCulling>,
-    >,
+    mut chunk_query: Query<(&mut Visibility, &Transform, &Face, &Aabb), With<NoFrustumCulling>>,
 ) {
     for (frustum, camera, gtransform) in view_query.iter() {
         if !camera.is_active {
@@ -50,7 +54,6 @@ pub fn chunk_culling(
         });
     }
 }
-
 
 fn intersects_aabb(frustum: &Frustum, aabb: &Aabb) -> bool {
     let min = aabb.min();

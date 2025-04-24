@@ -300,6 +300,8 @@ impl Plugin for Draw3d {
             .add_systems(Update, update_shared_load_area)
             .add_systems(Update, on_col_unload)
             //.add_systems(Update, chunk_aabb_gizmos)
-            .add_systems(PostUpdate, chunk_culling);
+            // .add_systems(PostUpdate, chunk_culling)
+            //
+            ;
     }
 }
