@@ -63,7 +63,7 @@ impl Chunk {
         res
     }
 
-    pub fn create_face_meshes(&self) -> [Option<(Mesh, Vec<[Vec3; 4]>)>; 6] {
+    pub fn create_face_meshes(&self) -> Option<(Mesh, Vec<[Vec3; 4]>)> {
         let lod = 1;
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
@@ -80,22 +80,33 @@ impl Chunk {
                 }
             }));
         bgm::mesh(&voxels, &mut mesh_data, transparents);
-        let mut meshes = core::array::from_fn(|_| None);
+
+        // Combined mesh data
+        let mut all_positions = Vec::new();
+        let mut all_normals = Vec::new();
+        let mut all_indices = Vec::new();
+        let mut all_uvs = Vec::new();
+        let mut all_colors = Vec::new();
+        let mut all_quad_sizes = Vec::new();
+        let mut all_physics_quads = Vec::new();
+
+        // Track vertex count to adjust indices correctly
+        let mut vertex_offset = 0;
 
         for (face_n, quads) in mesh_data.quads.iter().enumerate() {
             if quads.is_empty() {
                 continue;
             }
-            // Regular mesh data
+
+            // Per-face data that will be merged
             let mut positions = Vec::with_capacity(quads.len() * 4);
             let mut normals = Vec::with_capacity(quads.len() * 4);
-            let mut indicies = Vec::with_capacity(quads.len() * 6);
+            let mut indices = Vec::with_capacity(quads.len() * 6);
             let mut uvs = Vec::with_capacity(quads.len() * 4);
             let mut colors = Vec::with_capacity(quads.len() * 4);
             let mut quad_sizes = Vec::with_capacity(quads.len() * 4);
-
-            // Collect physics quad data
             let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
+
             let mut i = 0;
             for quad in quads {
                 i += 1;
@@ -114,8 +125,10 @@ impl Chunk {
                     colors.push(quad_mesh_data.colors[i]);
                     quad_sizes.push(quad_mesh_data.quad_sizes);
                 }
+
+                // Add indices, but adjust for the vertex_offset
                 for i in 0..6 {
-                    indicies.push(quad_mesh_data.indicies[i]);
+                    indices.push(quad_mesh_data.indicies[i] + vertex_offset);
                 }
 
                 // Create physics quad vertices for collision detection
@@ -144,23 +157,39 @@ impl Chunk {
                 physics_quads.push(physics_verts);
             }
 
-            // Create the render mesh with standard attributes
-            let mut render_mesh = Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            );
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-            render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-            // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, quad_sizes);
-            render_mesh.insert_indices(Indices::U32(indicies));
+            // Merge this face's data into the combined data
+            all_positions.extend(positions);
+            all_normals.extend(normals);
+            all_indices.extend(indices);
+            all_uvs.extend(uvs);
+            all_colors.extend(colors);
+            all_quad_sizes.extend(quad_sizes);
+            all_physics_quads.extend(physics_quads);
 
-            meshes[face_n] = Some((render_mesh, physics_quads));
+            // Update vertex offset for the next face
+            vertex_offset = all_positions.len() as u32;
         }
 
+        // If we have no vertices, return None
+        if all_positions.is_empty() {
+            mesh_build_span.exit();
+            return None;
+        }
+
+        // Create the combined render mesh with standard attributes
+        let mut render_mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, all_positions);
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, all_normals);
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, all_uvs);
+        render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, all_colors);
+        // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, all_quad_sizes);
+        render_mesh.insert_indices(Indices::U32(all_indices));
+
         mesh_build_span.exit();
-        meshes
+        Some((render_mesh, all_physics_quads))
     }
 
     pub fn create_ao_texture_data(&self) -> Image {

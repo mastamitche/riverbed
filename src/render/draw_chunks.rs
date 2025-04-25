@@ -117,94 +117,69 @@ pub fn process_mesh_queue(
 
         let lod = choose_lod_level(dist);
         if let Some(mut chunk) = blocks.chunks.get_mut(&chunk_pos) {
-            let face_meshes = chunk.create_face_meshes();
+            let face_mesh = chunk.create_face_meshes();
             chunk.changed = false;
 
-            for (i, face_mesh) in face_meshes.into_iter().enumerate() {
-                let face: Face = i.into();
+            if let Some((mesh, physics_quads)) = face_mesh {
+                let chunk_aabb =
+                    Aabb::from_min_max(Vec3::ZERO, Vec3::splat((CHUNK_S1 as f32) / 8.));
+                let mut collider_shapes: Vec<(Vec3, Quaternion, Collider)> = Vec::new();
 
-                if let Some((mesh, physics_quads)) = face_mesh {
-                    let chunk_aabb =
-                        Aabb::from_min_max(Vec3::ZERO, Vec3::splat((CHUNK_S1 as f32) / 8.));
-                    let mut collider_shapes: Vec<(Vec3, Quaternion, Collider)> = Vec::new();
+                for quad in physics_quads {
+                    // Extract min and max points to get the bounds
+                    let min_x = quad.iter().map(|v| v.x).reduce(f32::min).unwrap();
+                    let max_x = quad.iter().map(|v| v.x).reduce(f32::max).unwrap();
+                    let min_y = quad.iter().map(|v| v.y).reduce(f32::min).unwrap();
+                    let max_y = quad.iter().map(|v| v.y).reduce(f32::max).unwrap();
+                    let min_z = quad.iter().map(|v| v.z).reduce(f32::min).unwrap();
+                    let max_z = quad.iter().map(|v| v.z).reduce(f32::max).unwrap();
 
-                    for quad in physics_quads {
-                        // Extract min and max points to get the bounds
-                        let min_x = quad.iter().map(|v| v.x).reduce(f32::min).unwrap();
-                        let max_x = quad.iter().map(|v| v.x).reduce(f32::max).unwrap();
-                        let min_y = quad.iter().map(|v| v.y).reduce(f32::min).unwrap();
-                        let max_y = quad.iter().map(|v| v.y).reduce(f32::max).unwrap();
-                        let min_z = quad.iter().map(|v| v.z).reduce(f32::min).unwrap();
-                        let max_z = quad.iter().map(|v| v.z).reduce(f32::max).unwrap();
+                    // Calculate center and half-extents
+                    let center = Vec3::new(
+                        (min_x + max_x) * 0.5,
+                        (min_y + max_y) * 0.5,
+                        (min_z + max_z) * 0.5,
+                    );
 
-                        // Calculate center and half-extents
-                        let center = Vec3::new(
-                            (min_x + max_x) * 0.5,
-                            (min_y + max_y) * 0.5,
-                            (min_z + max_z) * 0.5,
-                        );
+                    let half_extents = Vec3::new(
+                        (max_x - min_x) * 0.5,
+                        (max_y - min_y) * 0.5,
+                        (max_z - min_z) * 0.5,
+                    );
 
-                        let half_extents = Vec3::new(
-                            (max_x - min_x) * 0.5,
-                            (max_y - min_y) * 0.5,
-                            (max_z - min_z) * 0.5,
-                        );
-
-                        // For faces that have zero thickness in one dimension, add a small thickness
-                        const MIN_THICKNESS: f32 = 0.01;
-                        let half_x = if half_extents.x < MIN_THICKNESS {
-                            MIN_THICKNESS
-                        } else {
-                            half_extents.x
-                        };
-                        let half_y = if half_extents.y < MIN_THICKNESS {
-                            MIN_THICKNESS
-                        } else {
-                            half_extents.y
-                        };
-                        let half_z = if half_extents.z < MIN_THICKNESS {
-                            MIN_THICKNESS
-                        } else {
-                            half_extents.z
-                        };
-
-                        // Create cuboid collider
-                        let cuboid = Collider::cuboid(half_x, half_y, half_z);
-
-                        // Add to compound collider (no rotation needed as faces are axis-aligned)
-                        collider_shapes.push((center.into(), Quaternion::default(), cuboid));
-                    }
-                    // Create compound collider from all cuboids
-                    let collider = Collider::compound(collider_shapes);
-                    // Check if entity already exists for this chunk face
-                    if let Some(ent) = chunk_ents.0.get(&(chunk_pos, face)) {
-                        if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
-                            let image = chunk.create_ao_texture_data();
-                            let ao_image_handle = images.add(image);
-                            chunk.ao_image = Some(ao_image_handle.clone());
-                            chunk.meshing = false;
-
-                            let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
-                            let base = ref_mat.base.clone();
-                            let new_material = materials.add(ExtendedMaterial {
-                                base: StandardMaterial { ..base },
-                                extension: ArrayTextureMaterial {
-                                    ao_data: chunk.ao_image.clone().unwrap(),
-                                },
-                            });
-
-                            mat.0 = new_material;
-                            handle.0 = meshes.add(mesh);
-                            *old_lod = LOD(lod);
-                        }
+                    // For faces that have zero thickness in one dimension, add a small thickness
+                    const MIN_THICKNESS: f32 = 0.01;
+                    let half_x = if half_extents.x < MIN_THICKNESS {
+                        MIN_THICKNESS
                     } else {
-                        // Create new entity if it doesn't exist
-                        if chunk.ao_image.is_none() {
-                            let image = chunk.create_ao_texture_data();
-                            let ao_image_handle = images.add(image);
-                            chunk.ao_image = Some(ao_image_handle.clone());
-                            chunk.meshing = false;
-                        }
+                        half_extents.x
+                    };
+                    let half_y = if half_extents.y < MIN_THICKNESS {
+                        MIN_THICKNESS
+                    } else {
+                        half_extents.y
+                    };
+                    let half_z = if half_extents.z < MIN_THICKNESS {
+                        MIN_THICKNESS
+                    } else {
+                        half_extents.z
+                    };
+
+                    // Create cuboid collider
+                    let cuboid = Collider::cuboid(half_x, half_y, half_z);
+
+                    // Add to compound collider (no rotation needed as faces are axis-aligned)
+                    collider_shapes.push((center.into(), Quaternion::default(), cuboid));
+                }
+                // Create compound collider from all cuboids
+                let collider = Collider::compound(collider_shapes);
+                // Check if entity already exists for this chunk face
+                if let Some(ent) = chunk_ents.0.get(&chunk_pos) {
+                    if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent) {
+                        let image = chunk.create_ao_texture_data();
+                        let ao_image_handle = images.add(image);
+                        chunk.ao_image = Some(ao_image_handle.clone());
+                        chunk.meshing = false;
 
                         let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
                         let base = ref_mat.base.clone();
@@ -215,33 +190,53 @@ pub fn process_mesh_queue(
                             },
                         });
 
-                        let ent = commands
-                            .spawn((
-                                Mesh3d(meshes.add(mesh)),
-                                MeshMaterial3d(new_material),
-                                Transform::from_translation(
-                                    Vec3::new(
-                                        (chunk_pos.x as f32) / 8.,
-                                        (chunk_pos.y as f32) / 8.,
-                                        (chunk_pos.z as f32) / 8.,
-                                    ) * CHUNK_S1 as f32,
-                                ),
-                                NoFrustumCulling,
-                                chunk_aabb,
-                                LOD(lod),
-                                face,
-                                //Physics
-                                RigidBody::Static, // Static for terrain
-                                collider,
-                            ))
-                            .id();
-                        chunk_ents.0.insert((chunk_pos, face), ent);
+                        mat.0 = new_material;
+                        handle.0 = meshes.add(mesh);
+                        *old_lod = LOD(lod);
                     }
                 } else {
-                    // If there's no mesh for this face, remove any existing entity
-                    if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
-                        commands.entity(ent).despawn();
+                    // Create new entity if it doesn't exist
+                    if chunk.ao_image.is_none() {
+                        let image = chunk.create_ao_texture_data();
+                        let ao_image_handle = images.add(image);
+                        chunk.ao_image = Some(ao_image_handle.clone());
+                        chunk.meshing = false;
                     }
+
+                    let ref_mat = materials.get_mut(&block_tex_array.0).unwrap();
+                    let base = ref_mat.base.clone();
+                    let new_material = materials.add(ExtendedMaterial {
+                        base: StandardMaterial { ..base },
+                        extension: ArrayTextureMaterial {
+                            ao_data: chunk.ao_image.clone().unwrap(),
+                        },
+                    });
+
+                    let ent = commands
+                        .spawn((
+                            Mesh3d(meshes.add(mesh)),
+                            MeshMaterial3d(new_material),
+                            Transform::from_translation(
+                                Vec3::new(
+                                    (chunk_pos.x as f32) / 8.,
+                                    (chunk_pos.y as f32) / 8.,
+                                    (chunk_pos.z as f32) / 8.,
+                                ) * CHUNK_S1 as f32,
+                            ),
+                            NoFrustumCulling,
+                            chunk_aabb,
+                            LOD(lod),
+                            //Physics
+                            RigidBody::Static, // Static for terrain
+                            collider,
+                        ))
+                        .id();
+                    chunk_ents.0.insert(chunk_pos, ent);
+                }
+            } else {
+                // If there's no mesh for this face, remove any existing entity
+                if let Some(ent) = chunk_ents.0.remove(&chunk_pos) {
+                    commands.entity(ent).despawn();
                 }
             }
         }
@@ -262,20 +257,18 @@ pub fn on_col_unload(
 ) {
     for col_ev in ev_unload.read() {
         for chunk_pos in chunks_in_col(&col_ev.0) {
-            for face in Face::iter() {
-                if let Some(ent) = chunk_ents.0.remove(&(chunk_pos, face)) {
-                    if let Ok(handle) = mesh_query.get(ent) {
-                        meshes.remove(handle);
-                    }
-                    commands.entity(ent).despawn();
+            if let Some(ent) = chunk_ents.0.remove(&chunk_pos) {
+                if let Ok(handle) = mesh_query.get(ent) {
+                    meshes.remove(handle);
                 }
+                commands.entity(ent).despawn();
             }
         }
     }
 }
 
 #[derive(Resource)]
-pub struct ChunkEntities(pub HashMap<(ChunkPos, Face), Entity>);
+pub struct ChunkEntities(pub HashMap<ChunkPos, Entity>);
 
 impl ChunkEntities {
     pub fn new() -> Self {
