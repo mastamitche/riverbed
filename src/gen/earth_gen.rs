@@ -59,7 +59,7 @@ impl Earth {
                         z: abs_z,
                         realm: col.realm,
                     };
-                    world.set_block(pos, Block::Dirt);
+                    world.set_block(pos, Block::AcaciaLeaves);
                 }
 
                 // Add grass at the top
