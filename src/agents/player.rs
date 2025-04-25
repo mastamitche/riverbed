@@ -179,19 +179,21 @@ pub fn spawn_player(
         })
         .add_child(player_model);
 }
+
 pub fn toggle_free_fly(
     mut player_query: Query<(&ActionState<DevCommand>), With<PlayerControlled>>,
     state: Res<State<AgentState>>,
     mut next_state: ResMut<NextState<AgentState>>,
 ) {
     let action_state = player_query.single_mut();
-    if action_state.get_pressed().contains(&DevCommand::ToggleFly) {
+    if action_state.just_released(&DevCommand::ToggleFly) {
         match state.get() {
             AgentState::Normal => next_state.set(AgentState::FreeFly),
             AgentState::FreeFly => next_state.set(AgentState::Normal),
         }
     }
 }
+
 pub fn move_player(
     mut player_query: Query<
         (&Transform, &mut LinearVelocity, &ActionState<Dir>),

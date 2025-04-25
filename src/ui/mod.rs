@@ -1,4 +1,4 @@
-use crate::agents::PlayerControlled;
+use crate::agents::{AgentState, PlayerControlled};
 use bevy::{
     input::mouse::MouseWheel,
     log::tracing_subscriber::fmt::format,
@@ -35,7 +35,8 @@ impl Plugin for UIPlugin {
                 //Debug testing
                 // ui_camera_system,
                 // update_camera_projection,
-            ),
+            )
+                .run_if(in_state(AgentState::Normal)),
         );
     }
 }
