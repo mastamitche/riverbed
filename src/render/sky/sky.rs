@@ -34,7 +34,7 @@ impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(AmbientLight {
             color: Color::srgb_u8(201, 226, 255),
-            brightness: OVERCAST_DAY,
+            brightness: 300.,
         })
         .insert_resource(AtmosphereModel::new(Nishita { ..default() }))
         .insert_resource(CycleTimer(Timer::new(

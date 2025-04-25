@@ -136,7 +136,7 @@ pub fn spawn_player(
 ) {
     let realm = Realm::Overworld;
 
-    let rd = RenderDistance(4);
+    let rd = RenderDistance(5);
     let player_model = commands
         .spawn((
             Transform::from_xyz(0., 0.5, 0.),
