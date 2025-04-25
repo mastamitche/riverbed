@@ -5,6 +5,8 @@ use super::AgentState;
 
 pub struct FreeFlyPlugin;
 
+const SUPER_SPEED: f32 = 5.0;
+
 impl Plugin for FreeFlyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
@@ -59,16 +61,19 @@ fn free_fly_camera_movement(
     if keys.pressed(KeyCode::KeyD) {
         direction.x += 1.0;
     }
-    if keys.pressed(KeyCode::Space) {
+    if keys.pressed(KeyCode::KeyE) {
         direction.y += 1.0;
     }
-    if keys.pressed(KeyCode::ShiftLeft) {
+    if keys.pressed(KeyCode::KeyQ) {
         direction.y -= 1.0;
     }
-
     if direction.length_squared() > 0.0 {
         direction = direction.normalize();
     }
+    if keys.pressed(KeyCode::ShiftLeft) {
+        direction *= SUPER_SPEED;
+    }
+
     let mut cam = query.single_mut();
     let cam_rotation = cam.rotation;
     let movement = direction * settings.movement_speed * time.delta_secs();

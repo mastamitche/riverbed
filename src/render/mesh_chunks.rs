@@ -282,7 +282,6 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
             vec![[x, y, z], [x - w, y, z], [x - w, y + h, z], [x, y + h, z]]
         }
         Face::Back => {
-            //To fix
             vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
         }
         _ => vec![[0.0, 0.0, 0.0]; 4],

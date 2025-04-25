@@ -314,11 +314,12 @@ fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
     var chunk_pos = vec3<i32>(chunk_x, chunk_y, chunk_z);
     
     // Calculate the fractional part of the scaled position
-    let fract_pos = vec3<f32>(
-        scaled_pos.x - floor(scaled_pos.x),
-        scaled_pos.y - floor(scaled_pos.y),
-        scaled_pos.z - floor(scaled_pos.z)
+   let fract_pos = vec3<f32>(
+        fract(scaled_pos.x),
+        fract(scaled_pos.y),
+        fract(scaled_pos.z)
     );
+    
     
     // Calculate weights based on position within the block
     var weights: vec3<f32>;
@@ -450,7 +451,7 @@ fn calc_ao(world_pos: vec3<f32>, normal: vec3<i32>) -> f32 {
     }
     
     // Clamp to ensure valid range
-    return clamp(ao_value, 0.3, 1.0);
+    return clamp(ao_value, 0.3, 0.9);
 }
 @vertex
 fn vertex(vertex: Vertex) -> CustomVertexOutput {
