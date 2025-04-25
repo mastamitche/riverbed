@@ -1,4 +1,3 @@
-include!(concat!(env!("OUT_DIR"), "/blocks.rs"));
 use agents::PlayerPlugin;
 use avian3d::{prelude::Gravity, PhysicsPlugins};
 use bevy::{
