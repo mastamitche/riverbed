@@ -1,15 +1,13 @@
+use super::AgentState;
 use super::{block_action::BlockActionPlugin, key_binds::KeyBinds};
 use crate::world::{BlockPos, BlockRayCastHit, Realm, VoxelWorld};
 use crate::{world::RenderDistance, Block};
-use avian3d::prelude::{
-    AngularVelocity, Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody,
-};
+use avian3d::prelude::{Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody};
 use bevy::{math::Vec3, prelude::*};
 use leafwing_input_manager::prelude::*;
-use std::time::Duration;
 
 const WALK_SPEED: f32 = 200.;
-const FREE_FLY_X_SPEED: f32 = 150.;
+
 const SPAWN: Vec3 = Vec3 {
     x: 500.,
     y: 8.,
@@ -37,11 +35,13 @@ impl Plugin for PlayerPlugin {
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
             )
+            .add_systems(Update, toggle_free_fly)
             .add_systems(
                 Update,
-                check_unlock_player.run_if(resource_exists::<PlayerUnlockTimer>),
+                check_unlock_player
+                    .run_if(resource_exists::<PlayerUnlockTimer>.and(in_state(AgentState::Normal))),
             )
-            .add_systems(Update, (move_player).run_if(player_phsysics_ready));
+            .add_systems(Update, (move_player).run_if(should_player_update));
     }
 }
 #[derive(Resource)]
@@ -179,6 +179,19 @@ pub fn spawn_player(
         })
         .add_child(player_model);
 }
+pub fn toggle_free_fly(
+    mut player_query: Query<(&ActionState<DevCommand>), With<PlayerControlled>>,
+    state: Res<State<AgentState>>,
+    mut next_state: ResMut<NextState<AgentState>>,
+) {
+    let action_state = player_query.single_mut();
+    if action_state.get_pressed().contains(&DevCommand::ToggleFly) {
+        match state.get() {
+            AgentState::Normal => next_state.set(AgentState::FreeFly),
+            AgentState::FreeFly => next_state.set(AgentState::Normal),
+        }
+    }
+}
 pub fn move_player(
     mut player_query: Query<
         (&Transform, &mut LinearVelocity, &ActionState<Dir>),
@@ -251,8 +264,10 @@ pub fn move_player(
         velocity.0.y = 0.0;
     }
 }
-fn player_phsysics_ready(
+
+fn should_player_update(
     player_query: Query<(&Transform, &LinearVelocity), With<PlayerControlled>>,
+    states: Res<State<AgentState>>,
 ) -> bool {
-    !player_query.is_empty()
+    !player_query.is_empty() && *states.get() == AgentState::Normal
 }

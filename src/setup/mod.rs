@@ -18,7 +18,7 @@ use ui::UIPlugin;
 use world::GenPlugin;
 use world::VoxelWorld;
 
-use crate::agents;
+use crate::agents::{self, AgentsPlugin};
 use crate::render;
 use crate::sounds;
 use crate::ui;
@@ -76,7 +76,7 @@ pub fn create_app() {
                 }),
             PhysicsPlugins::default(),
         ))
-        .add_plugins(PlayerPlugin)
+        .add_plugins(AgentsPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(GenPlugin)
         .add_plugins(Render)
