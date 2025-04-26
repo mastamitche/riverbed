@@ -87,4 +87,41 @@ impl Earth {
 
         fill_span.exit();
     }
+    pub fn flat_gen(&self, world: &VoxelWorld, col: ColPos) {
+        let fill_span = info_span!("chunk filling", name = "chunk filling").entered();
+
+        // Constants
+        const BASE_HEIGHT: i32 = 40; // Keep a base height for reference
+
+        // Get the chunks in this column
+        for y_chunk in 0..1 {
+            // Just fill one chunk high (0 level)
+            let chunk_pos = ChunkPos {
+                x: col.x,
+                y: y_chunk,
+                z: col.z,
+                realm: col.realm,
+            };
+
+            // Fill the entire chunk with blocks
+            for x in 0..CHUNK_S1 {
+                for z in 0..CHUNK_S1 {
+                    for y in 0..CHUNK_S1 {
+                        let pos = BlockPos {
+                            x: col.x * CHUNK_S1I + x as i32,
+                            y: y_chunk * CHUNK_S1I + y as i32,
+                            z: col.z * CHUNK_S1I + z as i32,
+                            realm: col.realm,
+                        };
+                        world.set_block(pos, Block::AcaciaLeaves);
+                    }
+                }
+            }
+
+            // Mark the chunk as loaded
+            world.set_loaded(chunk_pos);
+        }
+
+        fill_span.exit();
+    }
 }

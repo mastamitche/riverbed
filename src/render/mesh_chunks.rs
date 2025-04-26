@@ -12,6 +12,7 @@ use bevy::{
             Extent3d, PrimitiveTopology, TextureDimension, TextureFormat, VertexFormat,
         },
     },
+    utils::HashMap,
 };
 use binary_greedy_meshing::{self as bgm, Quad};
 
@@ -81,7 +82,6 @@ impl Chunk {
             }));
         bgm::mesh(&voxels, &mut mesh_data, transparents);
 
-        // Combined mesh data
         let mut all_positions = Vec::new();
         let mut all_normals = Vec::new();
         let mut all_indices = Vec::new();
@@ -90,21 +90,15 @@ impl Chunk {
         let mut all_quad_sizes = Vec::new();
         let mut all_physics_quads = Vec::new();
 
-        // Track vertex count to adjust indices correctly
-        let mut vertex_offset = 0;
+        // Use a HashMap with integer keys for vertex deduplication
+        let mut vertex_map = HashMap::new();
+        let mut next_vertex_index = 0;
 
         for (face_n, quads) in mesh_data.quads.iter().enumerate() {
             if quads.is_empty() {
                 continue;
             }
 
-            // Per-face data that will be merged
-            let mut positions = Vec::with_capacity(quads.len() * 4);
-            let mut normals = Vec::with_capacity(quads.len() * 4);
-            let mut indices = Vec::with_capacity(quads.len() * 6);
-            let mut uvs = Vec::with_capacity(quads.len() * 4);
-            let mut colors = Vec::with_capacity(quads.len() * 4);
-            let mut quad_sizes = Vec::with_capacity(quads.len() * 4);
             let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
 
             let mut i = 0;
@@ -117,62 +111,148 @@ impl Chunk {
                 // Get mesh data for this quad
                 let quad_mesh_data = quad_to_mesh_data(quad, block, face_n, i);
 
-                // Add vertices to mesh data
-                for i in 0..4 {
-                    positions.push(quad_mesh_data.positions[i]);
-                    normals.push(quad_mesh_data.normals[i]);
-                    uvs.push(quad_mesh_data.uvs[i]);
-                    colors.push(quad_mesh_data.colors[i]);
-                    quad_sizes.push(quad_mesh_data.quad_sizes);
-                }
-
-                // Add indices, but adjust for the vertex_offset
-                for i in 0..6 {
-                    indices.push(quad_mesh_data.indicies[i] + vertex_offset);
-                }
+                // Create a new set of indices for this quad
+                let mut quad_indices = Vec::with_capacity(4);
 
                 // Create physics quad vertices for collision detection
-                let physics_verts = [
-                    Vec3::new(
-                        quad_mesh_data.positions[0][0],
-                        quad_mesh_data.positions[0][1],
-                        quad_mesh_data.positions[0][2],
-                    ),
-                    Vec3::new(
-                        quad_mesh_data.positions[1][0],
-                        quad_mesh_data.positions[1][1],
-                        quad_mesh_data.positions[1][2],
-                    ),
-                    Vec3::new(
-                        quad_mesh_data.positions[2][0],
-                        quad_mesh_data.positions[2][1],
-                        quad_mesh_data.positions[2][2],
-                    ),
-                    Vec3::new(
-                        quad_mesh_data.positions[3][0],
-                        quad_mesh_data.positions[3][1],
-                        quad_mesh_data.positions[3][2],
-                    ),
-                ];
+                let mut physics_verts = [Vec3::ZERO; 4];
+
+                // Process each vertex of the quad
+                for i in 0..4 {
+                    let position = quad_mesh_data.positions[i];
+                    let normal = quad_mesh_data.normals[i];
+                    let uv = quad_mesh_data.uvs[i];
+                    let color = quad_mesh_data.colors[i];
+
+                    // Convert floats to integers for hashing (with appropriate precision)
+                    let pos_key = (
+                        (position[0] * 1000.0) as i32,
+                        (position[1] * 1000.0) as i32,
+                        (position[2] * 1000.0) as i32,
+                    );
+                    let normal_key = (
+                        (normal[0] * 100.0) as i8,
+                        (normal[1] * 100.0) as i8,
+                        (normal[2] * 100.0) as i8,
+                    );
+                    let uv_key = ((uv[0] * 100.0) as i16, (uv[1] * 100.0) as i16);
+                    let color_key = (
+                        (color[0] * 255.0) as u8,
+                        (color[1] * 255.0) as u8,
+                        (color[2] * 255.0) as u8,
+                        (color[3] * 255.0) as u8,
+                    );
+
+                    // Create a unique key for this vertex
+                    let vertex_key = (pos_key, normal_key, uv_key, color_key);
+
+                    // Get or create the vertex index
+                    let vertex_index = match vertex_map.get(&vertex_key) {
+                        Some(&index) => index,
+                        None => {
+                            // New unique vertex
+                            let index = next_vertex_index;
+                            vertex_map.insert(vertex_key, index);
+
+                            // Add vertex data to the combined arrays
+                            all_positions.push(position);
+                            all_normals.push(normal);
+                            all_uvs.push(uv);
+                            all_colors.push(color);
+                            all_quad_sizes.push(quad_mesh_data.quad_sizes);
+
+                            next_vertex_index += 1;
+                            index
+                        }
+                    };
+
+                    // Store the vertex index for this quad
+                    quad_indices.push(vertex_index);
+
+                    // Store physics vertex
+                    physics_verts[i] = Vec3::new(position[0], position[1], position[2]);
+                }
+
+                // Add the indices for this quad (two triangles)
+                // Adjust the order based on the face type
+                match face_n {
+                    0 => {
+                        // Face::Up
+                        all_indices.extend_from_slice(&[
+                            quad_indices[2],
+                            quad_indices[0],
+                            quad_indices[1],
+                            quad_indices[2],
+                            quad_indices[3],
+                            quad_indices[0],
+                        ]);
+                    }
+                    1 => {
+                        // Face::Down
+                        all_indices.extend_from_slice(&[
+                            quad_indices[0],
+                            quad_indices[2],
+                            quad_indices[1],
+                            quad_indices[0],
+                            quad_indices[3],
+                            quad_indices[2],
+                        ]);
+                    }
+                    2 => {
+                        // Face::Right
+                        all_indices.extend_from_slice(&[
+                            quad_indices[1],
+                            quad_indices[0],
+                            quad_indices[2],
+                            quad_indices[0],
+                            quad_indices[3],
+                            quad_indices[2],
+                        ]);
+                    }
+                    3 => {
+                        // Face::Left
+                        all_indices.extend_from_slice(&[
+                            quad_indices[0],
+                            quad_indices[1],
+                            quad_indices[3],
+                            quad_indices[3],
+                            quad_indices[1],
+                            quad_indices[2],
+                        ]);
+                    }
+                    4 => {
+                        // Face::Front
+                        all_indices.extend_from_slice(&[
+                            quad_indices[1],
+                            quad_indices[0],
+                            quad_indices[2],
+                            quad_indices[2],
+                            quad_indices[0],
+                            quad_indices[3],
+                        ]);
+                    }
+                    5 => {
+                        // Face::Back
+                        all_indices.extend_from_slice(&[
+                            quad_indices[1],
+                            quad_indices[2],
+                            quad_indices[0],
+                            quad_indices[2],
+                            quad_indices[3],
+                            quad_indices[0],
+                        ]);
+                    }
+                    _ => {}
+                }
+
                 physics_quads.push(physics_verts);
             }
 
-            // Merge this face's data into the combined data
-            all_positions.extend(positions);
-            all_normals.extend(normals);
-            all_indices.extend(indices);
-            all_uvs.extend(uvs);
-            all_colors.extend(colors);
-            all_quad_sizes.extend(quad_sizes);
             all_physics_quads.extend(physics_quads);
-
-            // Update vertex offset for the next face
-            vertex_offset = all_positions.len() as u32;
         }
 
         // If we have no vertices, return None
         if all_positions.is_empty() {
-            mesh_build_span.exit();
             return None;
         }
 
@@ -188,7 +268,6 @@ impl Chunk {
         // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, all_quad_sizes);
         render_mesh.insert_indices(Indices::U32(all_indices));
 
-        mesh_build_span.exit();
         Some((render_mesh, all_physics_quads))
     }
 
