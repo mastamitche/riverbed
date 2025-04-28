@@ -120,13 +120,14 @@ pub fn assign_load_area(
     mut query: Query<(Entity, &Transform, &Realm, &RenderDistance)>,
     mut col_orders: ResMut<LoadOrders>,
 ) {
-    let (player, transform, realm, render_dist) = query.single_mut();
-    let scaled_translation = transform.translation * 8.0;
-    let col = ColPos::from((scaled_translation, *realm));
-    let old_load_area = PlayerArea::empty();
-    let new_load_area = PlayerArea::new(col, *render_dist);
-    col_orders.on_load_area_change(player.index(), &old_load_area, &new_load_area);
-    commands.insert_resource(new_load_area.clone());
+    if let Ok((player, transform, realm, render_dist)) = query.single_mut() {
+        let scaled_translation = transform.translation * 8.0;
+        let col = ColPos::from((scaled_translation, *realm));
+        let old_load_area = PlayerArea::empty();
+        let new_load_area = PlayerArea::new(col, *render_dist);
+        col_orders.on_load_area_change(player.index(), &old_load_area, &new_load_area);
+        commands.insert_resource(new_load_area.clone());
+    }
 }
 
 pub fn update_load_area(
@@ -202,8 +203,8 @@ pub fn process_unload_orders(
     for col in col_orders.to_unload.drain(..) {
         blocks.unload_col(col);
         for entity_id in col_entities.unload_col(&col) {
-            if let Some(mut entity) = commands.get_entity(entity_id) {
-                entity.despawn();
+            if let entity = commands.get_entity(entity_id) {
+                entity.unwrap().despawn();
             }
         }
         ev_unload.send(ColUnloadEvent(col));

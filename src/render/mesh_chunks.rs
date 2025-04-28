@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, vec};
+use std::{
+    collections::{BTreeSet, HashMap},
+    vec,
+};
 
 use bevy::{
     image::Image,
@@ -12,7 +15,6 @@ use bevy::{
             Extent3d, PrimitiveTopology, TextureDimension, TextureFormat, VertexFormat,
         },
     },
-    utils::HashMap,
 };
 use binary_greedy_meshing::{self as bgm, Quad};
 
@@ -363,7 +365,6 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
         Face::Back => {
             vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
         }
-        _ => vec![[0.0, 0.0, 0.0]; 4],
     };
     let indicies: Vec<u32> = get_indices(face, quad_index);
 

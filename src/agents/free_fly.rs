@@ -74,10 +74,11 @@ fn free_fly_camera_movement(
         direction *= SUPER_SPEED;
     }
 
-    let mut cam = query.single_mut();
-    let cam_rotation = cam.rotation;
-    let movement = direction * settings.movement_speed * time.delta_secs();
-    cam.translation += cam_rotation * movement;
+    if let Ok(mut cam) = query.single_mut() {
+        let cam_rotation = cam.rotation;
+        let movement = direction * settings.movement_speed * time.delta_secs();
+        cam.translation += cam_rotation * movement;
+    }
 }
 
 // System to handle camera rotation

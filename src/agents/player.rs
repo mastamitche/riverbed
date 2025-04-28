@@ -1,10 +1,10 @@
+use super::block_action::BlockActionPlugin;
 use super::AgentState;
-use super::{block_action::BlockActionPlugin, key_binds::KeyBinds};
+use crate::keyboard::ActionMapping::{ActionState, GameAction};
 use crate::world::{BlockPos, BlockRayCastHit, Realm, VoxelWorld};
 use crate::{world::RenderDistance, Block};
 use avian3d::prelude::{Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody};
 use bevy::{math::Vec3, prelude::*};
-use leafwing_input_manager::prelude::*;
 
 const WALK_SPEED: f32 = 200.;
 
@@ -20,17 +20,13 @@ pub struct PlayerPlugin;
 pub struct PlayerSpawn;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(KeyBinds::default())
-            .insert_resource(PlayerUnlockTimer::default())
+        app.insert_resource(PlayerUnlockTimer::default())
             .insert_resource(StepUpSettings {
                 max_step_height: 1.0,
                 smoothing_factor: 0.15,
                 gravity_multiplier: 2.0,
             })
             .add_plugins(BlockActionPlugin)
-            .add_plugins(InputManagerPlugin::<Dir>::default())
-            .add_plugins(InputManagerPlugin::<Action>::default())
-            .add_plugins(InputManagerPlugin::<DevCommand>::default())
             .add_systems(
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
@@ -63,39 +59,6 @@ pub struct PlayerControlled;
 #[derive(Component)]
 pub struct TargetBlock(pub Option<BlockRayCastHit>);
 
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
-pub enum Dir {
-    Front,
-    Back,
-    Up,
-    Left,
-    Down,
-    Right,
-}
-
-impl From<Dir> for Vec3 {
-    fn from(dir: Dir) -> Self {
-        match dir {
-            Dir::Front => Vec3::new(0., 0., 1.),
-            Dir::Back => Vec3::new(0., 0., -1.),
-            Dir::Up => Vec3::new(0., 1., 0.),
-            Dir::Down => Vec3::new(0., -1., 0.),
-            Dir::Right => Vec3::new(1., 0., 0.),
-            Dir::Left => Vec3::new(-1., 0., 0.),
-        }
-    }
-}
-
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Debug, Hash, Reflect)]
-pub enum Action {
-    Hit,
-    Modify,
-}
-
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Debug, Hash, Reflect)]
-pub enum DevCommand {
-    ToggleFly,
-}
 #[derive(Resource)]
 pub struct StepUpSettings {
     pub max_step_height: f32,
@@ -112,25 +75,25 @@ pub fn check_unlock_player(
     timer.timer.tick(time.delta());
     if timer.timer.finished() {
         info!("World loaded, unlocking player");
-        let entity = player_query.single();
-        commands.entity(entity).insert((
-            RigidBody::Dynamic,
-            Collider::sphere(0.5),
-            ComputedMass::new(80.0),
-            Friction::new(0.4),
-            LinearVelocity(Vec3::new(0., 0., 0.)),
-            LockedAxes::new()
-                .lock_rotation_y()
-                .lock_rotation_x()
-                .lock_rotation_z(),
-        ));
-        commands.remove_resource::<PlayerUnlockTimer>();
+        if let Ok(entity) = player_query.single() {
+            commands.entity(entity).insert((
+                RigidBody::Dynamic,
+                Collider::sphere(0.5),
+                ComputedMass::new(80.0),
+                Friction::new(0.4),
+                LinearVelocity(Vec3::new(0., 0., 0.)),
+                LockedAxes::new()
+                    .lock_rotation_y()
+                    .lock_rotation_x()
+                    .lock_rotation_z(),
+            ));
+            commands.remove_resource::<PlayerUnlockTimer>();
+        }
     }
 }
 
 pub fn spawn_player(
     mut commands: Commands,
-    key_binds: Res<KeyBinds>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -157,36 +120,15 @@ pub fn spawn_player(
             PlayerControlled,
         ))
         .insert(SpatialListener::new(0.3))
-        .insert(InputManagerBundle::<Dir> {
-            action_state: ActionState::default(),
-            input_map: InputMap::new([
-                (Dir::Front, key_binds.forward),
-                (Dir::Left, key_binds.left),
-                (Dir::Back, key_binds.backward),
-                (Dir::Right, key_binds.right),
-            ]),
-        })
-        .insert(InputManagerBundle::<Action> {
-            action_state: ActionState::default(),
-            input_map: InputMap::new([
-                (Action::Hit, key_binds.hit),
-                (Action::Modify, key_binds.modify),
-            ]),
-        })
-        .insert(InputManagerBundle::<DevCommand> {
-            action_state: ActionState::default(),
-            input_map: InputMap::new([(DevCommand::ToggleFly, key_binds.toggle_fly)]),
-        })
         .add_child(player_model);
 }
 
 pub fn toggle_free_fly(
-    mut player_query: Query<(&ActionState<DevCommand>), With<PlayerControlled>>,
+    action_state: Res<ActionState>,
     state: Res<State<AgentState>>,
     mut next_state: ResMut<NextState<AgentState>>,
 ) {
-    let action_state = player_query.single_mut();
-    if action_state.just_released(&DevCommand::ToggleFly) {
+    if action_state.pressed(GameAction::ToggleFreeFly) {
         match state.get() {
             AgentState::Normal => next_state.set(AgentState::FreeFly),
             AgentState::FreeFly => next_state.set(AgentState::Normal),
@@ -195,75 +137,90 @@ pub fn toggle_free_fly(
 }
 
 pub fn move_player(
-    mut player_query: Query<
-        (&Transform, &mut LinearVelocity, &ActionState<Dir>),
-        With<PlayerControlled>,
-    >,
+    action_state: Res<ActionState>,
+    mut player_query: Query<(&Transform, &mut LinearVelocity), With<PlayerControlled>>,
     cam_query: Query<&Transform, With<Camera>>,
     world: Res<VoxelWorld>,
     time: Res<Time>,
 ) {
-    let cam_transform = if let Ok(ct) = cam_query.get_single() {
+    let cam_transform = if let Ok(ct) = cam_query.single() {
         *ct
     } else {
         Transform::default()
     };
 
-    let (transform, mut velocity, action_state) = player_query.single_mut();
-    let player_pos = transform.translation;
-    let delta_secs = time.delta_secs();
+    if let Ok((transform, mut velocity)) = player_query.single_mut() {
+        let player_pos = transform.translation;
+        let delta_secs = time.delta_secs();
 
-    // Part 1: Handle player input movement
-    let mut movement = Vec3::default();
-    for action in action_state.get_pressed() {
-        movement += Vec3::from(action);
-    }
+        // Part 1: Handle player input movement
+        let mut movement = Vec3::default();
 
-    if movement.length_squared() > 0. {
-        movement = movement.normalize();
-        movement = Vec3::Y.cross(*cam_transform.right()) * movement.z
-            + cam_transform.right() * movement.x
-            + movement.y * Vec3::Y;
-
-        // Only set horizontal movement from input
-        let horizontal_speed = WALK_SPEED * delta_secs;
-        velocity.0.x = movement.x * horizontal_speed;
-        velocity.0.z = movement.z * horizontal_speed;
-    } else {
-        velocity.0.x = 0.0;
-        velocity.0.z = 0.0;
-    }
-
-    // Part 2: Handle physics (gravity and step-up)
-    // Check if player is on ground
-    let below_pos = player_pos + Vec3::new(0.0, -1.05, 0.0);
-    let block_below = world.get_block_safe(BlockPos::from((below_pos, Realm::Overworld)));
-    let on_ground = block_below != Block::Air;
-
-    // Simple stair-stepping logic - only if we're moving horizontally
-    if on_ground && (velocity.0.x.abs() + velocity.0.z.abs() > 0.1) {
-        let movement_dir = Vec3::new(velocity.0.x, 0.0, velocity.0.z).normalize();
-        let step_pos = player_pos + movement_dir * 0.8 + Vec3::new(0.0, 0.5, 0.0);
-        let step_block = world.get_block_safe(BlockPos::from((step_pos, Realm::Overworld)));
-
-        if step_block == Block::Air
-            && world.get_block_safe(BlockPos::from((
-                step_pos + Vec3::new(0.0, -0.5, 0.0),
-                Realm::Overworld,
-            ))) != Block::Air
-        {
-            // Found a step, apply gentle upward velocity
-            velocity.0.y = 5.0;
+        // Check each movement direction and add to the movement vector
+        if action_state.pressed(GameAction::MoveForward) {
+            movement.z -= 1.0;
         }
-    }
+        if action_state.pressed(GameAction::MoveBackward) {
+            movement.z += 1.0;
+        }
+        if action_state.pressed(GameAction::MoveLeft) {
+            movement.x -= 1.0;
+        }
+        if action_state.pressed(GameAction::MoveRight) {
+            movement.x += 1.0;
+        }
 
-    // Apply gravity when in air
-    if !on_ground {
-        // Cap falling speed to prevent excessive acceleration
-        velocity.0.y = (velocity.0.y - 20.0 * delta_secs).max(-20.0);
-    } else if velocity.0.y < 0.0 {
-        // Stop falling when on ground
-        velocity.0.y = 0.0;
+        if movement.length_squared() > 0. {
+            movement = movement.normalize();
+            movement = Vec3::Y.cross(*cam_transform.right()) * movement.z
+                + cam_transform.right() * movement.x
+                + movement.y * Vec3::Y;
+
+            // Only set horizontal movement from input
+            let horizontal_speed = WALK_SPEED * delta_secs;
+            velocity.0.x = movement.x * horizontal_speed;
+            velocity.0.z = movement.z * horizontal_speed;
+        } else {
+            velocity.0.x = 0.0;
+            velocity.0.z = 0.0;
+        }
+
+        // Part 2: Handle physics (gravity and step-up)
+        // Check if player is on ground
+        let below_pos = player_pos + Vec3::new(0.0, -1.05, 0.0);
+        let block_below = world.get_block_safe(BlockPos::from((below_pos, Realm::Overworld)));
+        let on_ground = block_below != Block::Air;
+
+        // Handle jumping
+        if action_state.just_pressed(GameAction::Jump) && on_ground {
+            velocity.0.y = 8.0; // Jump velocity
+        }
+
+        // Simple stair-stepping logic - only if we're moving horizontally
+        if on_ground && (velocity.0.x.abs() + velocity.0.z.abs() > 0.1) {
+            let movement_dir = Vec3::new(velocity.0.x, 0.0, velocity.0.z).normalize();
+            let step_pos = player_pos + movement_dir * 0.8 + Vec3::new(0.0, 0.5, 0.0);
+            let step_block = world.get_block_safe(BlockPos::from((step_pos, Realm::Overworld)));
+
+            if step_block == Block::Air
+                && world.get_block_safe(BlockPos::from((
+                    step_pos + Vec3::new(0.0, -0.5, 0.0),
+                    Realm::Overworld,
+                ))) != Block::Air
+            {
+                // Found a step, apply gentle upward velocity
+                velocity.0.y = 5.0;
+            }
+        }
+
+        // Apply gravity when in air
+        if !on_ground {
+            // Cap falling speed to prevent excessive acceleration
+            velocity.0.y = (velocity.0.y - 20.0 * delta_secs).max(-20.0);
+        } else if velocity.0.y < 0.0 {
+            // Stop falling when on ground
+            velocity.0.y = 0.0;
+        }
     }
 }
 

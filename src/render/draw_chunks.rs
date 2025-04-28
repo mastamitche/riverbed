@@ -287,7 +287,7 @@ impl Plugin for Draw3d {
                 Startup,
                 (setup_shared_load_area, apply_deferred)
                     .chain()
-                    .after(LoadAreaAssigned),
+                    .after(LoadAreaAssigned::Assigned),
             )
             .add_systems(Update, (queue_mesh_generation, process_mesh_queue))
             .add_systems(Update, update_shared_load_area)

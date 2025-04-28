@@ -1,7 +1,6 @@
 use crate::render::camera::CameraSpawn;
 use bevy::{pbr::light_consts::lux::OVERCAST_DAY, prelude::*};
-use bevy_atmosphere::prelude::{AtmosphereCamera, AtmosphereModel, AtmospherePlugin, Nishita};
-use std::f32::consts::PI;
+use std::{f32::consts::PI, time::Duration};
 const DAY_LENGTH_MINUTES: f32 = 0.2;
 const C: f32 = DAY_LENGTH_MINUTES * 120. * PI;
 
@@ -13,8 +12,7 @@ struct CycleTimer(Timer);
 struct Sun;
 
 fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<Camera3d>>) {
-    let cam = cam_query.get_single().unwrap();
-    commands.entity(cam).insert(AtmosphereCamera::default());
+    let cam = cam_query.single().unwrap();
     commands.spawn((
         Sun,
         DirectionalLight {
@@ -35,14 +33,13 @@ impl Plugin for SkyPlugin {
         app.insert_resource(AmbientLight {
             color: Color::srgb_u8(201, 226, 255),
             brightness: 300.,
+            affects_lightmapped_meshes: false,
         })
-        .insert_resource(AtmosphereModel::new(Nishita { ..default() }))
         .insert_resource(CycleTimer(Timer::new(
             // Update our atmosphere every 500ms
-            bevy::utils::Duration::from_millis(500),
+            Duration::from_millis(500),
             TimerMode::Repeating,
         )))
-        .add_plugins(AtmospherePlugin)
         .add_systems(Startup, spawn_sun.after(CameraSpawn));
     }
 }

@@ -13,9 +13,10 @@ use crate::r#gen::terrain_gen::{
     process_terrain_generation, queue_terrain_generation, setup_gen_system,
 };
 use crate::{agents::PlayerSpawn, gen::*};
+use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::{
     app::Startup,
-    ecs::schedule::{apply_deferred, IntoSystemConfigs, SystemSet},
+    ecs::schedule::SystemSet,
     prelude::{Plugin, Update},
 };
 pub use chunk::*;
@@ -38,7 +39,9 @@ pub const WATER_H: i32 = 61;
 pub const Y_CHUNKS: usize = MAX_HEIGHT / CHUNK_S1;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, SystemSet)]
-pub struct LoadAreaAssigned;
+pub enum LoadAreaAssigned {
+    Assigned,
+}
 
 pub struct GenPlugin;
 
@@ -54,9 +57,8 @@ impl Plugin for GenPlugin {
             )
             .add_systems(
                 Startup,
-                (assign_load_area, apply_deferred)
-                    .chain()
-                    .in_set(LoadAreaAssigned)
+                assign_load_area
+                    .in_set(LoadAreaAssigned::Assigned)
                     .after(PlayerSpawn),
             )
             .add_systems(Update, update_load_area)

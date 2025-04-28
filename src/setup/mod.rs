@@ -1,4 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/blocks.rs"));
+use std::time::Duration;
+
 use agents::PlayerPlugin;
 use avian3d::{prelude::Gravity, PhysicsPlugins};
 use bevy::{
@@ -18,11 +20,14 @@ use ui::UIPlugin;
 use world::GenPlugin;
 use world::VoxelWorld;
 
-use crate::agents::{self, AgentsPlugin};
 use crate::render;
 use crate::sounds;
 use crate::ui;
 use crate::world;
+use crate::{
+    agents::{self, AgentsPlugin},
+    keyboard::ActionMappingPlugin,
+};
 
 pub fn create_app() {
     let mut app = App::new();
@@ -31,9 +36,11 @@ pub fn create_app() {
         config: FpsOverlayConfig {
             text_config: TextFont {
                 font_size: 15.0,
+                line_height: bevy::text::LineHeight::Px(15.0),
                 font: default(),
                 font_smoothing: FontSmoothing::default(),
             },
+            refresh_interval: Duration::from_millis(500),
             text_color: Color::WHITE,
             enabled: true,
         },
@@ -79,6 +86,7 @@ pub fn create_app() {
         .add_plugins(AgentsPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(GenPlugin)
+        .add_plugins(ActionMappingPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin)
         .add_plugins(TemporalAntiAliasPlugin)

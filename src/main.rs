@@ -7,6 +7,7 @@ mod agents;
 mod block;
 mod gen;
 mod items;
+mod keyboard;
 mod render;
 mod setup;
 mod sounds;

@@ -13,7 +13,9 @@ pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(EguiPlugin);
+        app.add_plugins(EguiPlugin {
+            enable_multipass_for_primary_context: true,
+        });
         app.insert_resource(CameraSettings {
             fov: 40.0,
             height: 30.0,
@@ -84,37 +86,37 @@ fn handle_camera_rotation(
     mut cursor_moved_events: EventReader<CursorMoved>,
     windows: Query<&Window>,
 ) {
-    let window = windows.single();
-
-    // Start dragging when right mouse button is pressed
-    if mouse_button_input.just_pressed(MouseButton::Right) {
-        camera_orbit.dragging = true;
-        if let Some(cursor_position) = window.cursor_position() {
-            camera_orbit.last_cursor_pos = cursor_position;
-        }
-    }
-
-    // Stop dragging when right mouse button is released
-    if mouse_button_input.just_released(MouseButton::Right) {
-        camera_orbit.dragging = false;
-    }
-
-    // If dragging, update the angle based on cursor movement
-    if camera_orbit.dragging {
-        for event in cursor_moved_events.read() {
-            let delta = event.position - camera_orbit.last_cursor_pos;
-
-            // Adjust rotation speed as needed
-            let rotation_speed = 0.005;
-            camera_orbit.angle += delta.x * rotation_speed;
-
-            // Wrap angle to keep it between 0 and 2π
-            camera_orbit.angle %= (2.0 * std::f32::consts::PI);
-            if camera_orbit.angle < 0.0 {
-                camera_orbit.angle += 2.0 * std::f32::consts::PI;
+    if let Ok(window) = windows.single() {
+        // Start dragging when right mouse button is pressed
+        if mouse_button_input.just_pressed(MouseButton::Right) {
+            camera_orbit.dragging = true;
+            if let Some(cursor_position) = window.cursor_position() {
+                camera_orbit.last_cursor_pos = cursor_position;
             }
+        }
 
-            camera_orbit.last_cursor_pos = event.position;
+        // Stop dragging when right mouse button is released
+        if mouse_button_input.just_released(MouseButton::Right) {
+            camera_orbit.dragging = false;
+        }
+
+        // If dragging, update the angle based on cursor movement
+        if camera_orbit.dragging {
+            for event in cursor_moved_events.read() {
+                let delta = event.position - camera_orbit.last_cursor_pos;
+
+                // Adjust rotation speed as needed
+                let rotation_speed = 0.005;
+                camera_orbit.angle += delta.x * rotation_speed;
+
+                // Wrap angle to keep it between 0 and 2π
+                camera_orbit.angle %= (2.0 * std::f32::consts::PI);
+                if camera_orbit.angle < 0.0 {
+                    camera_orbit.angle += 2.0 * std::f32::consts::PI;
+                }
+
+                camera_orbit.last_cursor_pos = event.position;
+            }
         }
     }
 }
@@ -128,70 +130,71 @@ pub fn adjust_camera_angle(
     time: Res<Time>,
     windows: Query<&Window>,
 ) {
-    let mut camera_transform = query.single_mut();
-    let (_, player_transform) = player_query.single();
-    let player_pos = player_transform.translation;
+    let mut camera_transform = query.single_mut().unwrap();
+    if let Ok((_, player_transform)) = player_query.single() {
+        let player_pos = player_transform.translation;
 
-    // Update target Y position - this is what we'll smoothly move toward
-    camera_smoothing.target_y = player_pos.y + camera_settings.height;
+        // Update target Y position - this is what we'll smoothly move toward
+        camera_smoothing.target_y = player_pos.y + camera_settings.height;
 
-    // Smooth Y movement using lerp
-    camera_smoothing.current_y = lerp(
-        camera_smoothing.current_y,
-        camera_smoothing.target_y,
-        camera_smoothing.smoothing_factor * time.delta_secs() * Y_CAM_SPEED,
-    );
+        // Smooth Y movement using lerp
+        camera_smoothing.current_y = lerp(
+            camera_smoothing.current_y,
+            camera_smoothing.target_y,
+            camera_smoothing.smoothing_factor * time.delta_secs() * Y_CAM_SPEED,
+        );
 
-    // Calculate base camera position using orbital angle
-    let base_camera_pos = Vec3::new(
-        player_pos.x + camera_settings.x_z_offset * camera_orbit.angle.cos(),
-        camera_smoothing.current_y, // Use smoothed Y value
-        player_pos.z + camera_settings.x_z_offset * camera_orbit.angle.sin(),
-    );
+        // Calculate base camera position using orbital angle
+        let base_camera_pos = Vec3::new(
+            player_pos.x + camera_settings.x_z_offset * camera_orbit.angle.cos(),
+            camera_smoothing.current_y, // Use smoothed Y value
+            player_pos.z + camera_settings.x_z_offset * camera_orbit.angle.sin(),
+        );
 
-    // Calculate player movement since last frame
-    let player_movement = player_pos - camera_smoothing.last_player_pos;
-    camera_smoothing.last_player_pos = player_pos;
+        // Calculate player movement since last frame
+        let player_movement = player_pos - camera_smoothing.last_player_pos;
+        camera_smoothing.last_player_pos = player_pos;
 
-    // Project player position onto camera's view plane
-    let window = windows.get_single().unwrap();
-    let window_size = Vec2::new(window.width(), window.height());
+        // Project player position onto camera's view plane
+        let window = windows.single().unwrap();
+        let window_size = Vec2::new(window.width(), window.height());
 
-    // Calculate view direction and right vector
-    let view_dir = (player_pos - camera_transform.translation).normalize();
-    let right = view_dir.cross(Vec3::Y).normalize();
-    let up = right.cross(view_dir).normalize();
+        // Calculate view direction and right vector
+        let view_dir = (player_pos - camera_transform.translation).normalize();
+        let right = view_dir.cross(Vec3::Y).normalize();
+        let up = right.cross(view_dir).normalize();
 
-    // Calculate the target box size in world units at player distance
-    let distance_to_player = (player_pos - camera_transform.translation).length();
-    let target_box_half_width =
-        window_size.x * camera_smoothing.target_box_width * 0.5 * distance_to_player / 1000.0;
-    let target_box_half_height =
-        window_size.y * camera_smoothing.target_box_height * 0.5 * distance_to_player / 1000.0;
+        // Calculate the target box size in world units at player distance
+        let distance_to_player = (player_pos - camera_transform.translation).length();
+        let target_box_half_width =
+            window_size.x * camera_smoothing.target_box_width * 0.5 * distance_to_player / 1000.0;
+        let target_box_half_height =
+            window_size.y * camera_smoothing.target_box_height * 0.5 * distance_to_player / 1000.0;
 
-    // Project player movement onto camera plane
-    let right_movement = player_movement.dot(right);
-    let up_movement = player_movement.dot(up);
+        // Project player movement onto camera plane
+        let right_movement = player_movement.dot(right);
+        let up_movement = player_movement.dot(up);
 
-    // Calculate camera adjustment to keep player in target box
-    let mut camera_adjustment = Vec3::ZERO;
+        // Calculate camera adjustment to keep player in target box
+        let mut camera_adjustment = Vec3::ZERO;
 
-    // Only adjust camera if player moves outside target box
-    if right_movement.abs() > target_box_half_width {
-        let excess = right_movement.abs() - target_box_half_width;
-        camera_adjustment += right * excess.signum() * right_movement.signum() * excess;
+        // Only adjust camera if player moves outside target box
+        if right_movement.abs() > target_box_half_width {
+            let excess = right_movement.abs() - target_box_half_width;
+            camera_adjustment += right * excess.signum() * right_movement.signum() * excess;
+        }
+
+        if up_movement.abs() > target_box_half_height {
+            let excess = up_movement.abs() - target_box_half_height;
+            camera_adjustment += up * excess.signum() * up_movement.signum() * excess;
+        }
+
+        // Apply camera position with adjustment
+        camera_transform.translation = base_camera_pos + camera_adjustment;
+
+        // Look at player position
+        camera_transform.look_at(player_pos, Vec3::Y);
     }
-
-    if up_movement.abs() > target_box_half_height {
-        let excess = up_movement.abs() - target_box_half_height;
-        camera_adjustment += up * excess.signum() * up_movement.signum() * excess;
-    }
-
-    // Apply camera position with adjustment
-    camera_transform.translation = base_camera_pos + camera_adjustment;
-
-    // Look at player position
-    camera_transform.look_at(player_pos, Vec3::Y);
 }
 
 // Helper function for linear interpolation
@@ -222,15 +225,15 @@ fn ui_player_system(
 ) {
     let player_pos = format!(
         "Player pos: x: {}, y: {}, z: {}",
-        player_query.single().1.translation.x.floor(),
-        player_query.single().1.translation.y.floor(),
-        player_query.single().1.translation.z.floor()
+        player_query.single().unwrap().1.translation.x.floor(),
+        player_query.single().unwrap().1.translation.y.floor(),
+        player_query.single().unwrap().1.translation.z.floor()
     );
     let camera_pos = format!(
         "Camera pos: x: {}, y: {}, z: {}",
-        query.single().translation.x.floor(),
-        query.single().translation.y.floor(),
-        query.single().translation.z.floor()
+        query.single().unwrap().translation.x.floor(),
+        query.single().unwrap().translation.y.floor(),
+        query.single().unwrap().translation.z.floor()
     );
     egui::Window::new("Player ").show(contexts.ctx_mut(), |ui| {
         ui.label(player_pos);
