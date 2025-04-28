@@ -14,6 +14,7 @@ mod render;
 mod setup;
 mod sounds;
 mod ui;
+mod utils;
 mod world;
 
 use setup::*;

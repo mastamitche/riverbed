@@ -66,6 +66,7 @@ impl Chunk {
         res
     }
 
+    //TODO, break this to be iteratable over many frames
     pub fn create_face_meshes(&self) -> Option<(Mesh, Vec<[Vec3; 4]>)> {
         let lod = 1;
         // Gathering binary greedy meshing input data
