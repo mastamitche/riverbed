@@ -321,7 +321,6 @@ impl Chunk {
 pub struct QuadMeshData {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
-    indicies: Vec<u32>,
     uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
     quad_sizes: [f32; 2],
@@ -366,8 +365,6 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
             vec![[x, y, z], [x, y + h, z], [x + w, y + h, z], [x + w, y, z]]
         }
     };
-    let indicies: Vec<u32> = get_indices(face, quad_index);
-
     // Generate UVs (simple 0-1 mapping)
     let uvs = vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 
@@ -378,7 +375,6 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
     QuadMeshData {
         positions,
         normals,
-        indicies,
         uvs,
         colors,
         quad_sizes: [w, h],

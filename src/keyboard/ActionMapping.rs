@@ -85,6 +85,10 @@ impl Default for InputMap {
         map.bind(InputSource::Keyboard(KeyCode::KeyA), GameAction::MoveLeft);
         map.bind(InputSource::Keyboard(KeyCode::KeyD), GameAction::MoveRight);
         map.bind(InputSource::Keyboard(KeyCode::Space), GameAction::Jump);
+        map.bind(
+            InputSource::Keyboard(KeyCode::F1),
+            GameAction::ToggleFreeFly,
+        );
 
         // Gamepad controls
         map.bind(
@@ -98,10 +102,6 @@ impl Default for InputMap {
         map.bind(
             InputSource::GamepadButton(GamepadButton::South),
             GameAction::Jump,
-        );
-        map.bind(
-            InputSource::Keyboard(KeyCode::F1),
-            GameAction::ToggleFreeFly,
         );
 
         map
