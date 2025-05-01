@@ -144,11 +144,9 @@ pub fn process_mesh_queue(
 ) {
     // Process current mesh if there is one
     if let Some((chunk_pos, dist)) = mesh_queue.in_progress {
-        println!("meshing chunk");
         // Skip if the chunk is no longer in the load area
         if !load_area.col_dists.contains_key(&chunk_pos.into()) {
             mesh_queue.in_progress = None;
-            println!("chunk no longer in load area");
             return;
         }
 
@@ -163,9 +161,7 @@ pub fn process_mesh_queue(
                 }
                 mesh_queue.in_progress = None;
             } else {
-                println!("Meshing stage:");
                 if meshing_state.stage == MeshingStage::Complete {
-                    println!("Complete");
                     chunk.changed = false;
                     mesh_queue.in_progress = None;
 
@@ -293,7 +289,6 @@ pub fn process_mesh_queue(
 
     // Get next mesh to process
     if mesh_queue.in_progress.is_none() && !mesh_queue.queue.is_empty() {
-        println!("Mesh queue not empty, adding next mesh");
         mesh_queue.in_progress = mesh_queue.queue.pop();
         mesh_queue.meshing_state = Some(ChunkMeshingState::default());
         mesh_queue.meshing_state.as_mut().unwrap().is_empty = false;
