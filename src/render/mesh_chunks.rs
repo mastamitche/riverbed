@@ -18,9 +18,11 @@ use bevy::{
 };
 use binary_greedy_meshing::{self as bgm, Quad};
 
-use super::texture_array::TextureMapTrait;
+use super::{draw_chunks::ChunkMeshingState, texture_array::TextureMapTrait};
 use crate::{
     block,
+    render::draw_chunks::MeshingStage,
+    utils::timeit_mut,
     world::{linearize, ChunkPos, CHUNKP_S1, CHUNK_S1},
 };
 use crate::{
@@ -67,211 +69,228 @@ impl Chunk {
     }
 
     //TODO, break this to be iteratable over many frames
-    pub fn create_face_meshes(&self) -> Option<(Mesh, Vec<[Vec3; 4]>)> {
+    pub fn create_face_meshes(
+        &self,
+        in_progress_state: &mut ChunkMeshingState,
+    ) -> Option<(Mesh, Vec<[Vec3; 4]>)> {
         let lod = 1;
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
-        let voxels = self.voxel_data_lod(lod);
-        let mut mesh_data = bgm::MeshData::new();
+        if in_progress_state.stage == MeshingStage::PrepareData {
+            in_progress_state.voxels = self.voxel_data_lod(lod);
+            in_progress_state.mesh_data = bgm::MeshData::new();
+            in_progress_state.stage = MeshingStage::Transparents;
+        }
+
         mesh_data_span.exit();
-        let mesh_build_span = info_span!("mesh build", name = "mesh build").entered();
-        let transparents =
-            BTreeSet::from_iter(self.palette.iter().enumerate().filter_map(|(i, block)| {
-                if i != 0 && !block.is_opaque() {
-                    Some(i as u16)
-                } else {
-                    None
+        if in_progress_state.stage == MeshingStage::Transparents {
+            in_progress_state.transparents =
+                BTreeSet::from_iter(self.palette.iter().enumerate().filter_map(|(i, block)| {
+                    if i != 0 && !block.is_opaque() {
+                        Some(i as u16)
+                    } else {
+                        None
+                    }
+                }));
+            in_progress_state.stage = MeshingStage::GreedyMeshing;
+        }
+        if in_progress_state.stage == MeshingStage::GreedyMeshing {
+            bgm::mesh(
+                &in_progress_state.voxels,
+                &mut in_progress_state.mesh_data,
+                in_progress_state.transparents.clone(),
+            );
+            in_progress_state.stage = MeshingStage::ProcessQuads;
+        }
+
+        if in_progress_state.stage == MeshingStage::ProcessQuads {
+            for (face_n, quads) in in_progress_state.mesh_data.quads.iter().enumerate() {
+                if quads.is_empty() {
+                    continue;
                 }
-            }));
-        bgm::mesh(&voxels, &mut mesh_data, transparents);
 
-        let mut all_positions = Vec::new();
-        let mut all_normals = Vec::new();
-        let mut all_indices = Vec::new();
-        let mut all_uvs = Vec::new();
-        let mut all_colors = Vec::new();
-        let mut all_quad_sizes = Vec::new();
-        let mut all_physics_quads = Vec::new();
+                let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
 
-        // Use a HashMap with integer keys for vertex deduplication
-        let mut vertex_map = HashMap::new();
-        let mut next_vertex_index = 0;
+                let mut i = 0;
+                for quad in quads {
+                    i += 1;
+                    let quad = *quad;
+                    let voxel_i = quad.v_type as usize;
+                    let block = self.palette[voxel_i];
 
-        for (face_n, quads) in mesh_data.quads.iter().enumerate() {
-            if quads.is_empty() {
-                continue;
-            }
+                    // Get mesh data for this quad
+                    let quad_mesh_data = quad_to_mesh_data(quad, block, face_n, i);
 
-            let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
+                    // Create a new set of indices for this quad
+                    let mut quad_indices = Vec::with_capacity(4);
 
-            let mut i = 0;
-            for quad in quads {
-                i += 1;
-                let quad = *quad;
-                let voxel_i = quad.v_type as usize;
-                let block = self.palette[voxel_i];
+                    // Create physics quad vertices for collision detection
+                    let mut physics_verts = [Vec3::ZERO; 4];
 
-                // Get mesh data for this quad
-                let quad_mesh_data = quad_to_mesh_data(quad, block, face_n, i);
+                    // Process each vertex of the quad
+                    for i in 0..4 {
+                        let position = quad_mesh_data.positions[i];
+                        let normal = quad_mesh_data.normals[i];
+                        let uv = quad_mesh_data.uvs[i];
+                        let color = quad_mesh_data.colors[i];
 
-                // Create a new set of indices for this quad
-                let mut quad_indices = Vec::with_capacity(4);
+                        // Convert floats to integers for hashing (with appropriate precision)
+                        let pos_key = (
+                            (position[0] * 1000.0) as i32,
+                            (position[1] * 1000.0) as i32,
+                            (position[2] * 1000.0) as i32,
+                        );
+                        let normal_key = (
+                            (normal[0] * 100.0) as i8,
+                            (normal[1] * 100.0) as i8,
+                            (normal[2] * 100.0) as i8,
+                        );
+                        let uv_key = ((uv[0] * 100.0) as i16, (uv[1] * 100.0) as i16);
+                        let color_key = (
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                            (color[3] * 255.0) as u8,
+                        );
 
-                // Create physics quad vertices for collision detection
-                let mut physics_verts = [Vec3::ZERO; 4];
+                        // Create a unique key for this vertex
+                        let vertex_key = (pos_key, normal_key, uv_key, color_key);
 
-                // Process each vertex of the quad
-                for i in 0..4 {
-                    let position = quad_mesh_data.positions[i];
-                    let normal = quad_mesh_data.normals[i];
-                    let uv = quad_mesh_data.uvs[i];
-                    let color = quad_mesh_data.colors[i];
+                        // Get or create the vertex index
+                        let vertex_index = match in_progress_state.vertex_map.get(&vertex_key) {
+                            Some(&index) => index,
+                            None => {
+                                // New unique vertex
+                                let index = in_progress_state.next_vertex_index;
+                                in_progress_state.vertex_map.insert(vertex_key, index);
 
-                    // Convert floats to integers for hashing (with appropriate precision)
-                    let pos_key = (
-                        (position[0] * 1000.0) as i32,
-                        (position[1] * 1000.0) as i32,
-                        (position[2] * 1000.0) as i32,
-                    );
-                    let normal_key = (
-                        (normal[0] * 100.0) as i8,
-                        (normal[1] * 100.0) as i8,
-                        (normal[2] * 100.0) as i8,
-                    );
-                    let uv_key = ((uv[0] * 100.0) as i16, (uv[1] * 100.0) as i16);
-                    let color_key = (
-                        (color[0] * 255.0) as u8,
-                        (color[1] * 255.0) as u8,
-                        (color[2] * 255.0) as u8,
-                        (color[3] * 255.0) as u8,
-                    );
+                                // Add vertex data to the combined arrays
+                                in_progress_state.all_positions.push(position);
+                                in_progress_state.all_normals.push(normal);
+                                in_progress_state.all_uvs.push(uv);
+                                in_progress_state.all_colors.push(color);
+                                // all_quad_sizes.push(quad_mesh_data.quad_sizes);
 
-                    // Create a unique key for this vertex
-                    let vertex_key = (pos_key, normal_key, uv_key, color_key);
+                                in_progress_state.next_vertex_index += 1;
+                                index
+                            }
+                        };
 
-                    // Get or create the vertex index
-                    let vertex_index = match vertex_map.get(&vertex_key) {
-                        Some(&index) => index,
-                        None => {
-                            // New unique vertex
-                            let index = next_vertex_index;
-                            vertex_map.insert(vertex_key, index);
+                        // Store the vertex index for this quad
+                        quad_indices.push(vertex_index);
 
-                            // Add vertex data to the combined arrays
-                            all_positions.push(position);
-                            all_normals.push(normal);
-                            all_uvs.push(uv);
-                            all_colors.push(color);
-                            all_quad_sizes.push(quad_mesh_data.quad_sizes);
+                        // Store physics vertex
+                        physics_verts[i] = Vec3::new(position[0], position[1], position[2]);
+                    }
 
-                            next_vertex_index += 1;
-                            index
+                    // Add the indices for this quad (two triangles)
+                    // Adjust the order based on the face type
+                    match face_n {
+                        0 => {
+                            // Face::Up
+                            in_progress_state.all_indices.extend_from_slice(&[
+                                quad_indices[2] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[1] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[3] as u32,
+                                quad_indices[0] as u32,
+                            ]);
                         }
-                    };
+                        1 => {
+                            // Face::Down
+                            in_progress_state.all_indices.extend_from_slice(&[
+                                quad_indices[0] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[1] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[3] as u32,
+                                quad_indices[2] as u32,
+                            ]);
+                        }
+                        2 => {
+                            // Face::Right
+                            in_progress_state.all_indices.extend_from_slice(&[
+                                quad_indices[1] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[3] as u32,
+                                quad_indices[2] as u32,
+                            ]);
+                        }
+                        3 => {
+                            // Face::Left
+                            in_progress_state.all_indices.extend_from_slice(&[
+                                quad_indices[0] as u32,
+                                quad_indices[1] as u32,
+                                quad_indices[3] as u32,
+                                quad_indices[3] as u32,
+                                quad_indices[1] as u32,
+                                quad_indices[2] as u32,
+                            ]);
+                        }
+                        4 => {
+                            // Face::Front
+                            in_progress_state.all_indices.extend_from_slice(&[
+                                quad_indices[1] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[3] as u32,
+                            ]);
+                        }
+                        5 => {
+                            // Face::Back
+                            in_progress_state.all_indices.extend_from_slice(&[
+                                quad_indices[1] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[0] as u32,
+                                quad_indices[2] as u32,
+                                quad_indices[3] as u32,
+                                quad_indices[0] as u32,
+                            ]);
+                        }
+                        _ => {}
+                    }
 
-                    // Store the vertex index for this quad
-                    quad_indices.push(vertex_index);
-
-                    // Store physics vertex
-                    physics_verts[i] = Vec3::new(position[0], position[1], position[2]);
+                    physics_quads.push(physics_verts);
                 }
 
-                // Add the indices for this quad (two triangles)
-                // Adjust the order based on the face type
-                match face_n {
-                    0 => {
-                        // Face::Up
-                        all_indices.extend_from_slice(&[
-                            quad_indices[2],
-                            quad_indices[0],
-                            quad_indices[1],
-                            quad_indices[2],
-                            quad_indices[3],
-                            quad_indices[0],
-                        ]);
-                    }
-                    1 => {
-                        // Face::Down
-                        all_indices.extend_from_slice(&[
-                            quad_indices[0],
-                            quad_indices[2],
-                            quad_indices[1],
-                            quad_indices[0],
-                            quad_indices[3],
-                            quad_indices[2],
-                        ]);
-                    }
-                    2 => {
-                        // Face::Right
-                        all_indices.extend_from_slice(&[
-                            quad_indices[1],
-                            quad_indices[0],
-                            quad_indices[2],
-                            quad_indices[0],
-                            quad_indices[3],
-                            quad_indices[2],
-                        ]);
-                    }
-                    3 => {
-                        // Face::Left
-                        all_indices.extend_from_slice(&[
-                            quad_indices[0],
-                            quad_indices[1],
-                            quad_indices[3],
-                            quad_indices[3],
-                            quad_indices[1],
-                            quad_indices[2],
-                        ]);
-                    }
-                    4 => {
-                        // Face::Front
-                        all_indices.extend_from_slice(&[
-                            quad_indices[1],
-                            quad_indices[0],
-                            quad_indices[2],
-                            quad_indices[2],
-                            quad_indices[0],
-                            quad_indices[3],
-                        ]);
-                    }
-                    5 => {
-                        // Face::Back
-                        all_indices.extend_from_slice(&[
-                            quad_indices[1],
-                            quad_indices[2],
-                            quad_indices[0],
-                            quad_indices[2],
-                            quad_indices[3],
-                            quad_indices[0],
-                        ]);
-                    }
-                    _ => {}
-                }
-
-                physics_quads.push(physics_verts);
+                in_progress_state.all_physics_quads.extend(physics_quads);
+            }
+            in_progress_state.stage = MeshingStage::Finalize;
+        }
+        if in_progress_state.stage == MeshingStage::Finalize {
+            in_progress_state.stage = MeshingStage::Complete;
+            // If we have no vertices, return None
+            if in_progress_state.all_positions.is_empty() {
+                in_progress_state.is_empty = true;
+                return None;
             }
 
-            all_physics_quads.extend(physics_quads);
+            // Create the combined render mesh with standard attributes
+            let mut render_mesh = Mesh::new(
+                PrimitiveTopology::TriangleList,
+                RenderAssetUsages::RENDER_WORLD,
+            );
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                in_progress_state.all_positions.clone(),
+            );
+            render_mesh.insert_attribute(
+                Mesh::ATTRIBUTE_NORMAL,
+                in_progress_state.all_normals.clone(),
+            );
+            render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, in_progress_state.all_uvs.clone());
+            render_mesh
+                .insert_attribute(Mesh::ATTRIBUTE_COLOR, in_progress_state.all_colors.clone());
+            // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, all_quad_sizes);
+            render_mesh.insert_indices(Indices::U32(in_progress_state.all_indices.clone()));
+            return Some((render_mesh, in_progress_state.all_physics_quads.clone()));
         }
-
-        // If we have no vertices, return None
-        if all_positions.is_empty() {
-            return None;
-        }
-
-        // Create the combined render mesh with standard attributes
-        let mut render_mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-        render_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, all_positions);
-        render_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, all_normals);
-        render_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, all_uvs);
-        render_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, all_colors);
-        // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, all_quad_sizes);
-        render_mesh.insert_indices(Indices::U32(all_indices));
-
-        Some((render_mesh, all_physics_quads))
+        None
     }
 
     pub fn create_ao_texture_data(&self) -> Image {
