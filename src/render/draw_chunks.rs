@@ -19,8 +19,11 @@ use itertools::{iproduct, Itertools};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use std::thread::yield_now;
+use std::time::Instant;
 use strum::IntoEnumIterator;
 const GRID_GIZMO_LEN: i32 = 4;
+
+pub const MAX_MESHING_MS: u32 = 4;
 
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
@@ -80,7 +83,6 @@ pub struct MeshGenerationQueue {
     meshing_state: Option<ChunkMeshingState>,
 }
 
-#[derive(Default)]
 pub struct ChunkMeshingState {
     // Current stage of meshing
     pub stage: MeshingStage,
@@ -98,7 +100,38 @@ pub struct ChunkMeshingState {
     pub all_physics_quads: Vec<[Vec3; 4]>,
     pub is_empty: bool,
 }
-#[derive(Default, PartialEq, Eq)]
+impl Default for ChunkMeshingState {
+    fn default() -> Self {
+        Self {
+            stage: MeshingStage::PrepareData,
+            mesh_data: MeshData::new(),
+            voxels: Vec::new(),
+            transparents: BTreeSet::new(),
+            next_vertex_index: 0,
+            vertex_map: HashMap::new(),
+            all_positions: Vec::new(),
+            all_normals: Vec::new(),
+            all_indices: Vec::new(),
+            all_uvs: Vec::new(),
+            all_colors: Vec::new(),
+            // all_quad_sizes: Vec::new(),
+            all_physics_quads: Vec::new(),
+            is_empty: false,
+        }
+    }
+}
+impl ChunkMeshingState {
+    pub fn is_overtime(&self, timer: &Instant) -> bool {
+        // Convert MAX_MESHING_MS from milliseconds to nanoseconds
+        const MAX_MESHING_NS: u128 = (MAX_MESHING_MS as u128) * 1_000_000;
+
+        let elapsed_ns = timer.elapsed().as_nanos();
+        let remaining_ns = MAX_MESHING_NS.saturating_sub(elapsed_ns);
+
+        elapsed_ns > MAX_MESHING_NS
+    }
+}
+#[derive(Default, PartialEq, Eq, Debug)]
 pub enum MeshingStage {
     #[default]
     PrepareData,
@@ -280,8 +313,6 @@ pub fn process_mesh_queue(
                             chunk_ents.0.insert(chunk_pos, ent);
                         }
                     }
-                } else {
-                    //Chunk needs to resume meshing later
                 }
             }
         }
@@ -291,7 +322,6 @@ pub fn process_mesh_queue(
     if mesh_queue.in_progress.is_none() && !mesh_queue.queue.is_empty() {
         mesh_queue.in_progress = mesh_queue.queue.pop();
         mesh_queue.meshing_state = Some(ChunkMeshingState::default());
-        mesh_queue.meshing_state.as_mut().unwrap().is_empty = false;
     }
 }
 
@@ -336,7 +366,7 @@ impl Plugin for Draw3d {
                     .chain()
                     .after(LoadAreaAssigned::Assigned),
             )
-            .add_systems(Update, (queue_mesh_generation, process_mesh_queue))
+            .add_systems(Update, (queue_mesh_generation, process_mesh_queue).chain())
             .add_systems(Update, update_shared_load_area)
             .add_systems(Update, on_col_unload)
             //.add_systems(Update, chunk_aabb_gizmos)

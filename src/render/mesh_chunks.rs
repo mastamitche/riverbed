@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    time::Instant,
     vec,
 };
 
@@ -74,12 +75,16 @@ impl Chunk {
         in_progress_state: &mut ChunkMeshingState,
     ) -> Option<(Mesh, Vec<[Vec3; 4]>)> {
         let lod = 1;
+        let meshing_start_time = Instant::now();
         // Gathering binary greedy meshing input data
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         if in_progress_state.stage == MeshingStage::PrepareData {
             in_progress_state.voxels = self.voxel_data_lod(lod);
             in_progress_state.mesh_data = bgm::MeshData::new();
             in_progress_state.stage = MeshingStage::Transparents;
+            if in_progress_state.is_overtime(&meshing_start_time) {
+                return None;
+            }
         }
 
         mesh_data_span.exit();
@@ -93,6 +98,9 @@ impl Chunk {
                     }
                 }));
             in_progress_state.stage = MeshingStage::GreedyMeshing;
+            if in_progress_state.is_overtime(&meshing_start_time) {
+                return None;
+            }
         }
         if in_progress_state.stage == MeshingStage::GreedyMeshing {
             bgm::mesh(
@@ -101,6 +109,9 @@ impl Chunk {
                 in_progress_state.transparents.clone(),
             );
             in_progress_state.stage = MeshingStage::ProcessQuads;
+            if in_progress_state.is_overtime(&meshing_start_time) {
+                return None;
+            }
         }
 
         if in_progress_state.stage == MeshingStage::ProcessQuads {
@@ -261,6 +272,9 @@ impl Chunk {
                 in_progress_state.all_physics_quads.extend(physics_quads);
             }
             in_progress_state.stage = MeshingStage::Finalize;
+            if in_progress_state.is_overtime(&meshing_start_time) {
+                return None;
+            }
         }
         if in_progress_state.stage == MeshingStage::Finalize {
             in_progress_state.stage = MeshingStage::Complete;
