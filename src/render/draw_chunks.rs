@@ -23,7 +23,7 @@ use std::time::Instant;
 use strum::IntoEnumIterator;
 const GRID_GIZMO_LEN: i32 = 4;
 
-pub const MAX_MESHING_MS: u32 = 4;
+pub const MAX_MESHING_MS: u32 = 2;
 
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
@@ -99,6 +99,9 @@ pub struct ChunkMeshingState {
     // pub all_quad_sizes: Vec<[f32; 2]>,
     pub all_physics_quads: Vec<[Vec3; 4]>,
     pub is_empty: bool,
+    pub current_face: usize,
+    pub current_quad_index: usize,
+    pub quad_batch_size: usize,
 }
 impl Default for ChunkMeshingState {
     fn default() -> Self {
@@ -117,6 +120,9 @@ impl Default for ChunkMeshingState {
             // all_quad_sizes: Vec::new(),
             all_physics_quads: Vec::new(),
             is_empty: false,
+            current_face: 0,
+            current_quad_index: 0,
+            quad_batch_size: 50,
         }
     }
 }
@@ -126,7 +132,6 @@ impl ChunkMeshingState {
         const MAX_MESHING_NS: u128 = (MAX_MESHING_MS as u128) * 1_000_000;
 
         let elapsed_ns = timer.elapsed().as_nanos();
-        let remaining_ns = MAX_MESHING_NS.saturating_sub(elapsed_ns);
 
         elapsed_ns > MAX_MESHING_NS
     }

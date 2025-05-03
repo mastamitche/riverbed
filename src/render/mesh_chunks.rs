@@ -103,11 +103,13 @@ impl Chunk {
             }
         }
         if in_progress_state.stage == MeshingStage::GreedyMeshing {
+            // timeit_mut("binary greedy meshing", || {
             bgm::mesh(
                 &in_progress_state.voxels,
                 &mut in_progress_state.mesh_data,
                 in_progress_state.transparents.clone(),
             );
+            // });
             in_progress_state.stage = MeshingStage::ProcessQuads;
             if in_progress_state.is_overtime(&meshing_start_time) {
                 return None;
@@ -115,22 +117,34 @@ impl Chunk {
         }
 
         if in_progress_state.stage == MeshingStage::ProcessQuads {
-            for (face_n, quads) in in_progress_state.mesh_data.quads.iter().enumerate() {
+            // timeit_mut("Processing Quads", || {
+            // Process a batch of quads from the current face
+            let mut processed_count = 0;
+            let batch_size = in_progress_state.quad_batch_size;
+
+            // While we have faces to process
+            while in_progress_state.current_face < 6 {
+                let face_n = in_progress_state.current_face;
+                let quads = &in_progress_state.mesh_data.quads[face_n];
+
+                // Skip empty faces
                 if quads.is_empty() {
+                    in_progress_state.current_face += 1;
+                    in_progress_state.current_quad_index = 0;
                     continue;
                 }
 
-                let mut physics_quads: Vec<[Vec3; 4]> = Vec::with_capacity(quads.len());
+                // Process a batch of quads from this face
+                let start_idx = in_progress_state.current_quad_index;
+                let end_idx = (start_idx + batch_size).min(quads.len());
 
-                let mut i = 0;
-                for quad in quads {
-                    i += 1;
-                    let quad = *quad;
+                for quad_idx in start_idx..end_idx {
+                    let quad = quads[quad_idx];
                     let voxel_i = quad.v_type as usize;
                     let block = self.palette[voxel_i];
 
                     // Get mesh data for this quad
-                    let quad_mesh_data = quad_to_mesh_data(quad, block, face_n, i);
+                    let quad_mesh_data = quad_to_mesh_data(quad, block, face_n, quad_idx as u32);
 
                     // Create a new set of indices for this quad
                     let mut quad_indices = Vec::with_capacity(4);
@@ -266,12 +280,32 @@ impl Chunk {
                         _ => {}
                     }
 
-                    physics_quads.push(physics_verts);
+                    in_progress_state.all_physics_quads.push(physics_verts);
+                    processed_count += 1;
                 }
 
-                in_progress_state.all_physics_quads.extend(physics_quads);
+                // Update the quad index
+                in_progress_state.current_quad_index = end_idx;
+
+                // If we've completed this face, move to the next
+                if in_progress_state.current_quad_index >= quads.len() {
+                    in_progress_state.current_face += 1;
+                    in_progress_state.current_quad_index = 0;
+                }
+
+                // Check if we've processed enough for this frame
+                if processed_count >= batch_size
+                    || in_progress_state.is_overtime(&meshing_start_time)
+                {
+                    return None;
+                }
             }
-            in_progress_state.stage = MeshingStage::Finalize;
+
+            // If we've processed all faces, move to finalization
+            if in_progress_state.current_face >= 6 {
+                in_progress_state.stage = MeshingStage::Finalize;
+            }
+
             if in_progress_state.is_overtime(&meshing_start_time) {
                 return None;
             }
