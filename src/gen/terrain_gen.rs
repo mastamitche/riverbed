@@ -1,15 +1,43 @@
 use crate::gen::earth_gen::Earth;
+use crate::setup::Block;
 use crate::world::pos2d::Pos2d;
+use crate::world::BlockPos;
+use crate::world::ChunkPos;
+use crate::world::ColPos;
 use crate::world::LoadOrders;
 use crate::world::VoxelWorld;
+use crate::world::CHUNK_S1;
+use crate::world::CHUNK_S1I;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+pub const MAX_GEN_TIME_MS: u32 = 10;
+
 #[derive(Resource, Default)]
 pub struct TerrainGenerationQueue {
-    queue: Vec<(Pos2d<62>, u32)>, // col_pos and priority/distance
-    in_progress: Option<Pos2d<62>>,
-    generator: Option<Earth>,
+    pub queue: Vec<(Pos2d<62>, u32)>, // col_pos and priority/distance
+    pub in_progress: Option<Pos2d<62>>,
+    pub generator: Option<Earth>,
+    // Generation state
+    pub gen_state: Option<GenerationState>,
+    pub max_gen_time_ms: u32, // Maximum milliseconds per frame for generation
+}
+#[derive(Default, Copy, Clone)]
+pub struct GenerationState {
+    pub col_pos: ColPos,
+    pub current_x: usize,
+    pub current_z: usize,
+    pub top_height: Option<i32>, // Store the calculated height when processing blocks
+    pub base_height: i32,
+    pub hill_height: i32,
+    pub phase: GenerationPhase,
+}
+#[derive(Default, Copy, Clone)]
+pub enum GenerationPhase {
+    #[default]
+    CalculatingHeights,
+    MarkingChunks,
+    Completed,
 }
 
 pub fn setup_gen_system(mut commands: Commands) {
@@ -19,9 +47,10 @@ pub fn setup_gen_system(mut commands: Commands) {
         queue: Vec::new(),
         in_progress: None,
         generator: Some(generator),
+        gen_state: None,
+        max_gen_time_ms: 5, // 5ms max per frame, adjust as needed
     });
 }
-
 pub fn queue_terrain_generation(
     mut terrain_queue: ResMut<TerrainGenerationQueue>,
     load_orders: Res<LoadOrders>,
@@ -35,23 +64,46 @@ pub fn queue_terrain_generation(
         }
     }
 }
-
 pub fn process_terrain_generation(
     mut terrain_queue: ResMut<TerrainGenerationQueue>,
     mut world: ResMut<VoxelWorld>,
 ) {
-    // Process current terrain chunk if there is one
-    if let Some(col_pos) = terrain_queue.in_progress.take() {
-        if let Some(generator) = &terrain_queue.generator {
-            // Generate the terrain for this column
-            generator.gen(&world, col_pos);
+    let start_time = std::time::Instant::now();
+    let col_pos_wrapped = terrain_queue.in_progress;
+    let mut gen_state_wrapped = terrain_queue.gen_state;
+    let gen_unwrapped = &terrain_queue.generator;
+    if gen_unwrapped.is_none() {
+        return;
+    }
+    if col_pos_wrapped.is_some() {
+        let col_pos = col_pos_wrapped.unwrap();
+        let gen = gen_unwrapped.as_ref().unwrap();
+        // If we don't have a generation state, initialize one
+        if gen_state_wrapped.is_none() {
+            gen_state_wrapped = Some(GenerationState {
+                col_pos,
+                current_x: 0,
+                current_z: 0,
+                top_height: None,
+                base_height: 40, // Constants from the original function
+                hill_height: 20,
+                phase: GenerationPhase::CalculatingHeights,
+            });
+        }
 
-            // Mark the column as changed so it will be meshed
-            // world.mark_change_col(col_pos);
+        let mut gen_state = gen_state_wrapped.unwrap();
+
+        let completed =
+            gen.process_generation_chunk(&mut gen_state, &world, MAX_GEN_TIME_MS, start_time);
+
+        // If generation is complete, clean up
+        terrain_queue.gen_state = Some(gen_state);
+        if completed {
+            terrain_queue.gen_state = None;
+            terrain_queue.in_progress = None;
         }
     }
-
-    // Get next chunk to process
+    // Get next chunk to process if we're not currently processing one
     if terrain_queue.in_progress.is_none() && !terrain_queue.queue.is_empty() {
         // Sort by priority if needed
         terrain_queue
