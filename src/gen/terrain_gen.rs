@@ -11,7 +11,7 @@ use crate::world::CHUNK_S1I;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-pub const MAX_GEN_TIME_MS: u32 = 10;
+pub const MAX_GEN_TIME_MS: u32 = 20;
 
 #[derive(Resource, Default)]
 pub struct TerrainGenerationQueue {
