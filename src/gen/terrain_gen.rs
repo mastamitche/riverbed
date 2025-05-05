@@ -20,7 +20,6 @@ pub struct TerrainGenerationQueue {
     pub generator: Option<Earth>,
     // Generation state
     pub gen_state: Option<GenerationState>,
-    pub max_gen_time_ms: u32, // Maximum milliseconds per frame for generation
 }
 #[derive(Default, Copy, Clone)]
 pub struct GenerationState {
@@ -48,7 +47,6 @@ pub fn setup_gen_system(mut commands: Commands) {
         in_progress: None,
         generator: Some(generator),
         gen_state: None,
-        max_gen_time_ms: 5, // 5ms max per frame, adjust as needed
     });
 }
 pub fn queue_terrain_generation(
