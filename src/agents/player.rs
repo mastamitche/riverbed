@@ -116,7 +116,7 @@ pub fn toggle_free_fly(
     state: Res<State<AgentState>>,
     mut next_state: ResMut<NextState<AgentState>>,
 ) {
-    if action_state.pressed(GameAction::ToggleFreeFly) {
+    if action_state.just_released(GameAction::ToggleFreeFly) {
         match state.get() {
             AgentState::Normal => next_state.set(AgentState::FreeFly),
             AgentState::FreeFly => next_state.set(AgentState::Normal),
