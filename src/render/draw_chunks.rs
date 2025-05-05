@@ -23,7 +23,7 @@ use std::time::Instant;
 use strum::IntoEnumIterator;
 const GRID_GIZMO_LEN: i32 = 4;
 
-pub const MAX_MESHING_MS: u32 = 2;
+pub const MAX_MESHING_MS: u32 = 5;
 
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
@@ -307,7 +307,7 @@ pub fn process_mesh_queue(
                                             (chunk_pos.z as f32) / 8.,
                                         ) * CHUNK_S1 as f32,
                                     ),
-                                    NoFrustumCulling,
+                                    // NoFrustumCulling,
                                     chunk_aabb,
                                     LOD(lod),
                                     //Physics

@@ -21,11 +21,6 @@ pub struct PlayerSpawn;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PlayerUnlockTimer::default())
-            .insert_resource(StepUpSettings {
-                max_step_height: 1.0,
-                smoothing_factor: 0.15,
-                gravity_multiplier: 2.0,
-            })
             .add_plugins(BlockActionPlugin)
             .add_systems(
                 Startup,
@@ -58,13 +53,6 @@ pub struct PlayerControlled;
 
 #[derive(Component)]
 pub struct TargetBlock(pub Option<BlockRayCastHit>);
-
-#[derive(Resource)]
-pub struct StepUpSettings {
-    pub max_step_height: f32,
-    pub smoothing_factor: f32,
-    pub gravity_multiplier: f32,
-}
 
 pub fn check_unlock_player(
     mut commands: Commands,
@@ -99,7 +87,7 @@ pub fn spawn_player(
 ) {
     let realm = Realm::Overworld;
 
-    let rd = RenderDistance(5);
+    let rd = RenderDistance(7);
     let player_model = commands
         .spawn((
             Transform::from_xyz(0., 0.5, 0.),
