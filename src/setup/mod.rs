@@ -13,7 +13,10 @@ use bevy::{
     },
     text::FontSmoothing,
 };
-use bevy_dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin};
+use bevy_dev_tools::{
+    fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
+    picking_debug::{DebugPickingMode, DebugPickingPlugin},
+};
 use render::{Render, TextureLoadPlugin};
 use sounds::SoundPlugin;
 use ui::UIPlugin;
@@ -26,7 +29,7 @@ use crate::ui;
 use crate::world;
 use crate::{
     agents::{self, AgentsPlugin},
-    keyboard::ActionMappingPlugin,
+    controls::ActionMappingPlugin,
 };
 
 pub fn create_app() {
@@ -90,5 +93,7 @@ pub fn create_app() {
         .add_plugins(Render)
         .add_plugins(SoundPlugin)
         .add_plugins(TemporalAntiAliasPlugin)
+        .add_plugins((MeshPickingPlugin, DebugPickingPlugin))
+        .insert_resource(DebugPickingMode::Normal)
         .run();
 }

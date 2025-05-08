@@ -1,6 +1,6 @@
 use super::block_action::BlockActionPlugin;
 use super::AgentState;
-use crate::keyboard::ActionMapping::{ActionState, GameAction};
+use crate::controls::action_mapping::{ActionState, GameAction};
 use crate::world::{BlockPos, BlockRayCastHit, Realm, VoxelWorld};
 use crate::{world::RenderDistance, Block};
 use avian3d::prelude::{Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody};
@@ -107,6 +107,11 @@ pub fn spawn_player(
             TargetBlock(None),
             PlayerControlled,
         ))
+        .observe(
+            |trigger: Trigger<Pointer<Move>>, mut transforms: Query<&mut Transform>| {
+                let mv = trigger.event();
+            },
+        )
         .insert(SpatialListener::new(0.3))
         .add_child(player_model);
 }

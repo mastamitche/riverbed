@@ -93,7 +93,7 @@ pub struct ChunkMeshingState {
     pub vertex_map: HashMap<((i32, i32, i32), (i8, i8, i8), (i16, i16), (u8, u8, u8, u8)), i32>,
     pub all_positions: Vec<[f32; 3]>,
     pub all_normals: Vec<[f32; 3]>,
-    pub all_indices: Vec<u32>,
+    pub all_indices: Vec<u16>,
     pub all_uvs: Vec<[f32; 2]>,
     pub all_colors: Vec<[f32; 4]>,
     // pub all_quad_sizes: Vec<[f32; 2]>,
@@ -310,10 +310,18 @@ pub fn process_mesh_queue(
                                     // NoFrustumCulling,
                                     chunk_aabb,
                                     LOD(lod),
+                                    Pickable {
+                                        should_block_lower: true,
+                                        is_hoverable: true,
+                                    },
                                     //Physics
                                     RigidBody::Static, // Static for terrain
                                     collider,
                                 ))
+                                .observe(|trigger: Trigger<Pointer<Over>>| {
+                                    let mv = trigger.event();
+                                    println!("world move: {mv:?}");
+                                })
                                 .id();
                             chunk_ents.0.insert(chunk_pos, ent);
                         }

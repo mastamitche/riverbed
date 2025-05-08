@@ -25,6 +25,7 @@ bevy = { version = "0.16" ,default-features = true, features = [
     "bevy_text",
     "bevy_ui",
 ]  }
+bevy_picking = "0.16"
 bevy_dev_tools = "0.16"
 binary-greedy-meshing = { path = "crates/binary-greedy-meshing", version = "*" }
 indexmap = "*"

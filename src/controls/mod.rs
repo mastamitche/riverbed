@@ -1,12 +1,14 @@
-pub mod ActionMapping;
+pub mod action_mapping;
 
+use action_mapping::*;
 use bevy::app::Plugin;
-use ActionMapping::*;
 
 pub struct ActionMappingPlugin;
 
 impl Plugin for ActionMappingPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_plugins(InputControllerPlugin);
+        app.add_plugins(InputControllerPlugin)
+            //b
+            ;
     }
 }

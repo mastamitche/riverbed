@@ -214,67 +214,67 @@ impl Chunk {
                         0 => {
                             // Face::Up
                             in_progress_state.all_indices.extend_from_slice(&[
-                                quad_indices[2] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[1] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[3] as u32,
-                                quad_indices[0] as u32,
+                                quad_indices[2] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[1] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[3] as u16,
+                                quad_indices[0] as u16,
                             ]);
                         }
                         1 => {
                             // Face::Down
                             in_progress_state.all_indices.extend_from_slice(&[
-                                quad_indices[0] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[1] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[3] as u32,
-                                quad_indices[2] as u32,
+                                quad_indices[0] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[1] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[3] as u16,
+                                quad_indices[2] as u16,
                             ]);
                         }
                         2 => {
                             // Face::Right
                             in_progress_state.all_indices.extend_from_slice(&[
-                                quad_indices[1] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[3] as u32,
-                                quad_indices[2] as u32,
+                                quad_indices[1] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[3] as u16,
+                                quad_indices[2] as u16,
                             ]);
                         }
                         3 => {
                             // Face::Left
                             in_progress_state.all_indices.extend_from_slice(&[
-                                quad_indices[0] as u32,
-                                quad_indices[1] as u32,
-                                quad_indices[3] as u32,
-                                quad_indices[3] as u32,
-                                quad_indices[1] as u32,
-                                quad_indices[2] as u32,
+                                quad_indices[0] as u16,
+                                quad_indices[1] as u16,
+                                quad_indices[3] as u16,
+                                quad_indices[3] as u16,
+                                quad_indices[1] as u16,
+                                quad_indices[2] as u16,
                             ]);
                         }
                         4 => {
                             // Face::Front
                             in_progress_state.all_indices.extend_from_slice(&[
-                                quad_indices[1] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[3] as u32,
+                                quad_indices[1] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[3] as u16,
                             ]);
                         }
                         5 => {
                             // Face::Back
                             in_progress_state.all_indices.extend_from_slice(&[
-                                quad_indices[1] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[0] as u32,
-                                quad_indices[2] as u32,
-                                quad_indices[3] as u32,
-                                quad_indices[0] as u32,
+                                quad_indices[1] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[0] as u16,
+                                quad_indices[2] as u16,
+                                quad_indices[3] as u16,
+                                quad_indices[0] as u16,
                             ]);
                         }
                         _ => {}
@@ -335,7 +335,7 @@ impl Chunk {
             render_mesh
                 .insert_attribute(Mesh::ATTRIBUTE_COLOR, in_progress_state.all_colors.clone());
             // render_mesh.insert_attribute(ATTRIBUTE_QUAD_SIZE, all_quad_sizes);
-            render_mesh.insert_indices(Indices::U32(in_progress_state.all_indices.clone()));
+            render_mesh.insert_indices(Indices::U16(in_progress_state.all_indices.clone()));
             return Some((render_mesh, in_progress_state.all_physics_quads.clone()));
         }
         None
@@ -391,7 +391,6 @@ pub struct QuadMeshData {
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
-    quad_sizes: [f32; 2],
 }
 pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u32) -> QuadMeshData {
     // Extract components
@@ -445,23 +444,8 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
         normals,
         uvs,
         colors,
-        quad_sizes: [w, h],
     }
 }
-
-fn get_indices(face: Face, quad_index: u32) -> Vec<u32> {
-    let base = quad_index << 2; // Multiply by 4 to get the base vertex index
-
-    match face {
-        Face::Up => vec![base + 2, base + 0, base + 1, base + 2, base + 3, base + 0],
-        Face::Down => vec![base + 0, base + 2, base + 1, base + 0, base + 3, base + 2],
-        Face::Front => vec![base + 1, base + 0, base + 2, base + 2, base + 0, base + 3],
-        Face::Back => vec![base + 1, base + 2, base + 0, base + 2, base + 3, base + 0],
-        Face::Left => vec![base + 0, base + 1, base + 3, base + 3, base + 1, base + 2],
-        Face::Right => vec![base + 1, base + 0, base + 2, base + 0, base + 3, base + 2],
-    }
-}
-
 pub fn get_color_from_block(block: &Block, face: &Face) -> [f32; 4] {
     let color_bits = match (block, face) {
         (Block::GrassBlock, Face::Up) => 0b011_111_001,

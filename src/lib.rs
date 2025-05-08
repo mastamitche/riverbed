@@ -7,9 +7,9 @@ use wasm_bindgen::prelude::*;
 
 mod agents;
 mod block;
+mod controls;
 mod gen;
 mod items;
-mod keyboard;
 mod render;
 mod setup;
 mod sounds;

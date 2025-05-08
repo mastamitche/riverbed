@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    input::mouse::{MouseMotion, MouseWheel},
+    prelude::*,
+};
 use std::collections::HashMap;
 
 // Define our game actions
@@ -10,6 +13,9 @@ pub enum GameAction {
     MoveRight,
     Jump,
     ToggleFreeFly,
+    PrimaryAction,
+    SecondaryAction,
+    MiddleAction,
 }
 
 // Input source types
@@ -18,22 +24,28 @@ pub enum InputSource {
     Keyboard(KeyCode),
     GamepadButton(GamepadButton),
     GamepadAxis(GamepadAxis),
+    MouseButton(MouseButton),
+    MouseMotion(MouseAxis),
+    MouseWheel(MouseWheelAxis),
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MouseAxis {
+    X,
+    Y,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MouseWheelAxis {
+    X,
+    Y,
 }
 
 // Action state with strength (for analog inputs)
-#[derive(Debug, Clone, Resource)]
+#[derive(Default, Debug, Clone, Resource)]
 pub struct ActionState {
     actions: HashMap<GameAction, f32>,
     previous_actions: HashMap<GameAction, f32>,
-}
-
-impl Default for ActionState {
-    fn default() -> Self {
-        Self {
-            actions: HashMap::new(),
-            previous_actions: HashMap::new(),
-        }
-    }
+    deltas: HashMap<GameAction, f32>,
 }
 
 impl ActionState {
@@ -59,6 +71,14 @@ impl ActionState {
 
     fn previous_value(&self, action: GameAction) -> f32 {
         *self.previous_actions.get(&action).unwrap_or(&0.0)
+    }
+
+    pub fn reset_deltas(&mut self) {
+        self.deltas.clear();
+    }
+
+    pub fn set_delta(&mut self, action: GameAction, value: f32) {
+        self.deltas.insert(action, value);
     }
 }
 
@@ -103,6 +123,18 @@ impl Default for InputMap {
             InputSource::GamepadButton(GamepadButton::South),
             GameAction::Jump,
         );
+        map.bind(
+            InputSource::MouseButton(MouseButton::Left),
+            GameAction::PrimaryAction,
+        );
+        map.bind(
+            InputSource::MouseButton(MouseButton::Right),
+            GameAction::SecondaryAction,
+        );
+        map.bind(
+            InputSource::MouseButton(MouseButton::Middle),
+            GameAction::MiddleAction,
+        );
 
         map
     }
@@ -129,7 +161,7 @@ impl Plugin for InputControllerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InputMap>()
             .init_resource::<ActionState>()
-            .add_systems(Update, (update_action_state))
+            .add_systems(Update, update_action_state)
             // .add_systems(Update, (debug_input_system))
             //break
             ;
@@ -140,13 +172,35 @@ fn update_action_state(
     mut action_state: ResMut<ActionState>,
     input_map: Res<InputMap>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut mouse_motion_events: EventReader<MouseMotion>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
     gamepads: Query<(Entity, &Gamepad)>,
 ) {
     // Store previous frame's actions
     action_state.previous_actions = action_state.actions.clone();
 
+    // Reset deltas for this frame
+    action_state.reset_deltas();
+
     // Create a temporary map to collect maximum values for each action
     let mut action_values: HashMap<GameAction, f32> = HashMap::new();
+
+    // Process mouse motion events
+    let mut mouse_delta_x = 0.0;
+    let mut mouse_delta_y = 0.0;
+    for event in mouse_motion_events.read() {
+        mouse_delta_x += event.delta.x;
+        mouse_delta_y += event.delta.y;
+    }
+
+    // Process mouse wheel events
+    let mut wheel_delta_x = 0.0;
+    let mut wheel_delta_y = 0.0;
+    for event in mouse_wheel_events.read() {
+        wheel_delta_x += event.x;
+        wheel_delta_y += event.y;
+    }
 
     // Process all inputs
     for (input, action) in input_map.action_mappings.iter() {
@@ -158,6 +212,35 @@ fn update_action_state(
                     0.0
                 }
             }
+            InputSource::MouseButton(button) => {
+                if mouse_button_input.pressed(*button) {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            InputSource::MouseMotion(axis) => {
+                match axis {
+                    MouseAxis::X => {
+                        action_state.set_delta(*action, mouse_delta_x);
+                        mouse_delta_x.abs().min(1.0) // Normalize for pressed state
+                    }
+                    MouseAxis::Y => {
+                        action_state.set_delta(*action, mouse_delta_y);
+                        mouse_delta_y.abs().min(1.0) // Normalize for pressed state
+                    }
+                }
+            }
+            InputSource::MouseWheel(axis) => match axis {
+                MouseWheelAxis::X => {
+                    action_state.set_delta(*action, wheel_delta_x);
+                    wheel_delta_x.abs().min(1.0)
+                }
+                MouseWheelAxis::Y => {
+                    action_state.set_delta(*action, wheel_delta_y);
+                    wheel_delta_y.abs().min(1.0)
+                }
+            },
             InputSource::GamepadButton(button_type) => {
                 let mut button_pressed = false;
                 for (_, gamepad) in gamepads.iter() {
