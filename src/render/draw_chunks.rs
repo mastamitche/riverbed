@@ -14,6 +14,8 @@ use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 use bevy::render::view::NoFrustumCulling;
 use bevy::tasks::AsyncComputeTaskPool;
+use bevy_picking::mesh_picking::ray_cast::SimplifiedMesh;
+use bevy_picking::pointer::PointerInteraction;
 use binary_greedy_meshing::MeshData;
 use itertools::{iproduct, Itertools};
 use std::collections::{BTreeSet, HashMap};
@@ -24,7 +26,12 @@ use strum::IntoEnumIterator;
 const GRID_GIZMO_LEN: i32 = 4;
 
 pub const MAX_MESHING_MS: u32 = 5;
-
+#[derive(Event)]
+struct VoxelPlacementEvent {
+    position: Vec3,
+    normal: Vec3,
+    voxel_size: f32,
+}
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
 
@@ -90,7 +97,7 @@ pub struct ChunkMeshingState {
     pub voxels: Vec<u16>,
     pub transparents: BTreeSet<u16>,
     pub next_vertex_index: i32,
-    pub vertex_map: HashMap<((i32, i32, i32), (i8, i8, i8), (i16, i16), (u8, u8, u8, u8)), i32>,
+    pub vertex_map: HashMap<((i32, i32, i32)), i32>,
     pub all_positions: Vec<[f32; 3]>,
     pub all_normals: Vec<[f32; 3]>,
     pub all_indices: Vec<u16>,
@@ -295,10 +302,10 @@ pub fn process_mesh_queue(
                                     ao_data: chunk.ao_image.clone().unwrap(),
                                 },
                             });
-
+                            let mesh_handle = meshes.add(mesh);
                             let ent = commands
                                 .spawn((
-                                    Mesh3d(meshes.add(mesh)),
+                                    Mesh3d(mesh_handle.clone()),
                                     MeshMaterial3d(new_material),
                                     Transform::from_translation(
                                         Vec3::new(
@@ -314,14 +321,48 @@ pub fn process_mesh_queue(
                                         should_block_lower: true,
                                         is_hoverable: true,
                                     },
+                                    //SimplifiedMesh(mesh_handle),
                                     //Physics
                                     RigidBody::Static, // Static for terrain
                                     collider,
                                 ))
-                                .observe(|trigger: Trigger<Pointer<Over>>| {
-                                    let mv = trigger.event();
-                                    println!("world move: {mv:?}");
-                                })
+                                .observe(
+                                    |trigger: Trigger<Pointer<Move>>,
+                                     mut preview_query: Query<
+                                        (&mut Transform, &mut Visibility),
+                                        With<BuildingPreview>,
+                                    >| {
+                                        let mv = trigger.event();
+
+                                        if let Some(world_position) = mv.hit.position {
+                                            if let Some(normal) = mv.hit.normal {
+                                                // Convert world position to voxel grid (1/8 unit per voxel)
+                                                let voxel_size = 0.125; // 1/8
+                                                println!("Normal {}", normal);
+                                                let mut voxel_pos = Vec3::new(
+                                                    (world_position.x / voxel_size).round()
+                                                        * voxel_size,
+                                                    (world_position.y / voxel_size).round()
+                                                        * voxel_size,
+                                                    (world_position.z / voxel_size).round()
+                                                        * voxel_size,
+                                                ) + normal.normalize()
+                                                    * voxel_size;
+
+                                                // Update preview cube
+                                                if let Ok((mut transform, mut visibility)) =
+                                                    preview_query.single_mut()
+                                                {
+                                                    // Update position
+                                                    transform.translation = voxel_pos;
+
+                                                    // Make visible if not already
+                                                    *visibility = Visibility::Visible;
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
                                 .id();
                             chunk_ents.0.insert(chunk_pos, ent);
                         }
@@ -357,6 +398,28 @@ pub fn on_col_unload(
     }
 }
 
+fn setup_building_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // Spawn an initially invisible preview cube
+    commands.spawn((
+        BuildingPreview,
+        Mesh3d(meshes.add(Cuboid::new(0.125, 0.125, 0.125))),
+        MeshMaterial3d(materials.add(Color::srgba(1., 1., 1., 0.5))),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Visibility::Hidden,
+    ));
+}
+#[derive(Resource, Default)]
+struct BuildingState {
+    current_position: Option<Vec3>,
+    current_normal: Option<Vec3>,
+}
+#[derive(Component)]
+struct BuildingPreview;
+
 #[derive(Resource)]
 pub struct ChunkEntities(pub HashMap<ChunkPos, Entity>);
 
@@ -371,6 +434,8 @@ pub struct Draw3d;
 impl Plugin for Draw3d {
     fn build(&self, app: &mut App) {
         app.add_plugins(TextureArrayPlugin)
+            .init_resource::<BuildingState>()
+            .add_systems(Startup, setup_building_system)
             .init_resource::<MeshGenerationQueue>()
             .insert_resource(ChunkEntities::new())
             .add_systems(

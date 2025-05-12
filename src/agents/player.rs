@@ -107,11 +107,6 @@ pub fn spawn_player(
             TargetBlock(None),
             PlayerControlled,
         ))
-        .observe(
-            |trigger: Trigger<Pointer<Move>>, mut transforms: Query<&mut Transform>| {
-                let mv = trigger.event();
-            },
-        )
         .insert(SpatialListener::new(0.3))
         .add_child(player_model);
 }

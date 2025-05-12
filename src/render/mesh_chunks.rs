@@ -155,7 +155,7 @@ impl Chunk {
                     // Process each vertex of the quad
                     for i in 0..4 {
                         let position = quad_mesh_data.positions[i];
-                        let normal = quad_mesh_data.normals[i];
+                        let normal: [f32; 3] = quad_mesh_data.normals[i];
                         let uv = quad_mesh_data.uvs[i];
                         let color = quad_mesh_data.colors[i];
 
@@ -165,21 +165,9 @@ impl Chunk {
                             (position[1] * 1000.0) as i32,
                             (position[2] * 1000.0) as i32,
                         );
-                        let normal_key = (
-                            (normal[0] * 100.0) as i8,
-                            (normal[1] * 100.0) as i8,
-                            (normal[2] * 100.0) as i8,
-                        );
-                        let uv_key = ((uv[0] * 100.0) as i16, (uv[1] * 100.0) as i16);
-                        let color_key = (
-                            (color[0] * 255.0) as u8,
-                            (color[1] * 255.0) as u8,
-                            (color[2] * 255.0) as u8,
-                            (color[3] * 255.0) as u8,
-                        );
 
                         // Create a unique key for this vertex
-                        let vertex_key = (pos_key, normal_key, uv_key, color_key);
+                        let vertex_key = (pos_key);
 
                         // Get or create the vertex index
                         let vertex_index = match in_progress_state.vertex_map.get(&vertex_key) {
@@ -190,16 +178,16 @@ impl Chunk {
                                 in_progress_state.vertex_map.insert(vertex_key, index);
 
                                 // Add vertex data to the combined arrays
-                                in_progress_state.all_positions.push(position);
-                                in_progress_state.all_normals.push(normal);
-                                in_progress_state.all_uvs.push(uv);
-                                in_progress_state.all_colors.push(color);
                                 // all_quad_sizes.push(quad_mesh_data.quad_sizes);
 
                                 in_progress_state.next_vertex_index += 1;
                                 index
                             }
                         };
+                        in_progress_state.all_positions.push(position);
+                        in_progress_state.all_normals.push(normal);
+                        in_progress_state.all_uvs.push(uv);
+                        in_progress_state.all_colors.push(color);
 
                         // Store the vertex index for this quad
                         quad_indices.push(vertex_index);
@@ -321,8 +309,9 @@ impl Chunk {
             // Create the combined render mesh with standard attributes
             let mut render_mesh = Mesh::new(
                 PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
+                RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             );
+            println!("All normals {:?}", in_progress_state.all_normals);
             render_mesh.insert_attribute(
                 Mesh::ATTRIBUTE_POSITION,
                 in_progress_state.all_positions.clone(),
@@ -417,7 +406,7 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
             vec![[x, y, z], [x, y, z + h], [x + w, y, z + h], [x + w, y, z]]
         }
         Face::Down => {
-            vec![[x, y, z], [x + w, y, z], [x + w, y, z + h], [x, y, z + h]]
+            vec![[x, y, z], [x - w, y, z], [x - w, y, z + h], [x, y, z + h]]
         }
         Face::Right => {
             vec![[x, y, z], [x, y - w, z], [x, y - w, z + h], [x, y, z + h]]

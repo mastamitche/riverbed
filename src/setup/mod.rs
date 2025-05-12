@@ -93,7 +93,7 @@ pub fn create_app() {
         .add_plugins(Render)
         .add_plugins(SoundPlugin)
         .add_plugins(TemporalAntiAliasPlugin)
-        .add_plugins((MeshPickingPlugin, DebugPickingPlugin))
+        .add_plugins((MeshPickingPlugin)) //, DebugPickingPlugin))
         .insert_resource(DebugPickingMode::Normal)
         .run();
 }

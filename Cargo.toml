@@ -37,7 +37,7 @@ colorsys = "*"
 anyhow = "*"
 serde = "*"
 strum = "*"
-avian3d = { git = "https://github.com/Jondolf/avian", branch = "main" }
+avian3d = "0.3"
 bevy_flycam = "*"
 strum_macros = "*"
 dashmap = "*"
@@ -58,7 +58,18 @@ riverbed_closest = { path = "crates/riverbed_closest", version = "*" }
 riverbed_block_def = { path = "crates/riverbed_block_def", version = "*" }
 
 [profile.dev]
-opt-level = 1
+opt-level = 0
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 0
+
+
+# Add a new profile for debugging release builds
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+opt-level = 0
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-timer = { version = "0.2" }
