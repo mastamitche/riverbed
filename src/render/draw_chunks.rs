@@ -97,7 +97,21 @@ pub struct ChunkMeshingState {
     pub voxels: Vec<u16>,
     pub transparents: BTreeSet<u16>,
     pub next_vertex_index: i32,
-    pub vertex_map: HashMap<((i32, i32, i32)), i32>,
+    pub vertex_map: HashMap<
+        (
+            (i32, i32, i32), // position
+            i32,
+            i32,
+            i32, // normal
+            u8,
+            u8,
+            u8,
+            u8, // color
+            i32,
+            i32, // uv
+        ),
+        i32,
+    >,
     pub all_positions: Vec<[f32; 3]>,
     pub all_normals: Vec<[f32; 3]>,
     pub all_indices: Vec<u16>,
@@ -333,32 +347,29 @@ pub fn process_mesh_queue(
                                         With<BuildingPreview>,
                                     >| {
                                         let mv = trigger.event();
-
+                                        // Convert world position to voxel grid (1/8 unit per voxel)
                                         if let Some(world_position) = mv.hit.position {
-                                            if let Some(normal) = mv.hit.normal {
-                                                // Convert world position to voxel grid (1/8 unit per voxel)
-                                                let voxel_size = 0.125; // 1/8
-                                                println!("Normal {}", normal);
-                                                let mut voxel_pos = Vec3::new(
-                                                    (world_position.x / voxel_size).round()
-                                                        * voxel_size,
-                                                    (world_position.y / voxel_size).round()
-                                                        * voxel_size,
-                                                    (world_position.z / voxel_size).round()
-                                                        * voxel_size,
-                                                ) + normal.normalize()
-                                                    * voxel_size;
+                                            let voxel_size = 0.125;
+                                            let half_voxel_size = voxel_size / 2.0;
 
-                                                // Update preview cube
-                                                if let Ok((mut transform, mut visibility)) =
-                                                    preview_query.single_mut()
-                                                {
-                                                    // Update position
-                                                    transform.translation = voxel_pos;
+                                            let target_voxel_pos = Vec3::new(
+                                                (world_position.x / voxel_size).floor()
+                                                    * voxel_size
+                                                    + half_voxel_size,
+                                                (world_position.y / voxel_size).floor()
+                                                    * voxel_size
+                                                    + half_voxel_size,
+                                                (world_position.z / voxel_size).floor()
+                                                    * voxel_size
+                                                    + half_voxel_size,
+                                            );
 
-                                                    // Make visible if not already
-                                                    *visibility = Visibility::Visible;
-                                                }
+                                            if let Ok((mut transform, mut visibility)) =
+                                                preview_query.single_mut()
+                                            {
+                                                transform.translation = target_voxel_pos;
+
+                                                *visibility = Visibility::Visible;
                                             }
                                         }
                                     },
@@ -407,7 +418,7 @@ fn setup_building_system(
     commands.spawn((
         BuildingPreview,
         Mesh3d(meshes.add(Cuboid::new(0.125, 0.125, 0.125))),
-        MeshMaterial3d(materials.add(Color::srgba(1., 1., 1., 0.5))),
+        MeshMaterial3d(materials.add(Color::srgba(1., 1., 1., 0.3))),
         Transform::from_xyz(0.0, 0.0, 0.0),
         Visibility::Hidden,
     ));

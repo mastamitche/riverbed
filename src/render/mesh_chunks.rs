@@ -167,8 +167,22 @@ impl Chunk {
                         );
 
                         // Create a unique key for this vertex
-                        let vertex_key = (pos_key);
-
+                        let vertex_key = (
+                            // Position
+                            pos_key,
+                            // Normal
+                            (normal[0] * 100.0) as i32,
+                            (normal[1] * 100.0) as i32,
+                            (normal[2] * 100.0) as i32,
+                            // Color
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                            (color[3] * 255.0) as u8,
+                            // UV
+                            (uv[0] * 1000.0) as i32,
+                            (uv[1] * 1000.0) as i32,
+                        );
                         // Get or create the vertex index
                         let vertex_index = match in_progress_state.vertex_map.get(&vertex_key) {
                             Some(&index) => index,
@@ -177,17 +191,14 @@ impl Chunk {
                                 let index = in_progress_state.next_vertex_index;
                                 in_progress_state.vertex_map.insert(vertex_key, index);
 
-                                // Add vertex data to the combined arrays
-                                // all_quad_sizes.push(quad_mesh_data.quad_sizes);
-
+                                in_progress_state.all_positions.push(position);
+                                in_progress_state.all_normals.push(normal);
+                                in_progress_state.all_uvs.push(uv);
+                                in_progress_state.all_colors.push(color);
                                 in_progress_state.next_vertex_index += 1;
                                 index
                             }
                         };
-                        in_progress_state.all_positions.push(position);
-                        in_progress_state.all_normals.push(normal);
-                        in_progress_state.all_uvs.push(uv);
-                        in_progress_state.all_colors.push(color);
 
                         // Store the vertex index for this quad
                         quad_indices.push(vertex_index);
@@ -311,7 +322,6 @@ impl Chunk {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             );
-            println!("All normals {:?}", in_progress_state.all_normals);
             render_mesh.insert_attribute(
                 Mesh::ATTRIBUTE_POSITION,
                 in_progress_state.all_positions.clone(),
