@@ -1,6 +1,6 @@
 pub mod camera;
 mod chunk_culling;
-mod draw_chunks;
+pub mod draw_chunks;
 mod effects;
 mod mesh_chunks;
 mod mesh_utils;

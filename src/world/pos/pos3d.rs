@@ -14,6 +14,11 @@ pub struct Pos3d<const U: usize> {
     pub z: i32,
     pub realm: Realm,
 }
+impl<const U: usize> Pos3d<U> {
+    pub fn new(x: i32, y: i32, z: i32, realm: Realm) -> Self {
+        Self { x, y, z, realm }
+    }
+}
 
 const K: usize = 0x9E3779B9;
 

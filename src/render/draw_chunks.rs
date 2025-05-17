@@ -177,7 +177,6 @@ pub fn queue_mesh_generation(
         if let Some(shared_area) = shared_load_area.0.try_read() {
             if let Some((chunk_pos, dist)) = shared_area.pop_closest_change(&blocks.chunks) {
                 mesh_queue.queue.push((chunk_pos, dist));
-                // println!("Queuing chunk {:?}", chunk_pos);
             }
         }
     }
@@ -196,6 +195,7 @@ pub fn process_mesh_queue(
         &mut Mesh3d,
         &mut MeshMaterial3d<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>,
         &mut LOD,
+        &mut Transform,
     )>,
     mut meshes: ResMut<Assets<Mesh>>,
     block_tex_array: Res<BlockTextureArray>,
@@ -279,7 +279,8 @@ pub fn process_mesh_queue(
                         let collider = Collider::compound(collider_shapes);
                         // Check if entity already exists for this chunk face
                         if let Some(ent) = chunk_ents.0.get(&chunk_pos) {
-                            if let Ok((mut handle, mut mat, mut old_lod)) = mesh_query.get_mut(*ent)
+                            if let Ok((mut handle, mut mat, mut old_lod, mut trans)) =
+                                mesh_query.get_mut(*ent)
                             {
                                 let image = chunk.create_ao_texture_data();
                                 let ao_image_handle = images.add(image);
@@ -298,6 +299,8 @@ pub fn process_mesh_queue(
                                 mat.0 = new_material;
                                 handle.0 = meshes.add(mesh);
                                 *old_lod = LOD(lod);
+                            } else {
+                                println!("couldn't get_mut mesh for chunk {}", chunk_pos);
                             }
                         } else {
                             // Create new entity if it doesn't exist
@@ -317,17 +320,16 @@ pub fn process_mesh_queue(
                                 },
                             });
                             let mesh_handle = meshes.add(mesh);
+                            let mesh_pos = Vec3::new(
+                                (chunk_pos.x as f32) / 8.,
+                                (chunk_pos.y as f32) / 8.,
+                                (chunk_pos.z as f32) / 8.,
+                            ) * CHUNK_S1 as f32;
                             let ent = commands
                                 .spawn((
                                     Mesh3d(mesh_handle.clone()),
                                     MeshMaterial3d(new_material),
-                                    Transform::from_translation(
-                                        Vec3::new(
-                                            (chunk_pos.x as f32) / 8.,
-                                            (chunk_pos.y as f32) / 8.,
-                                            (chunk_pos.z as f32) / 8.,
-                                        ) * CHUNK_S1 as f32,
-                                    ),
+                                    Transform::from_translation(mesh_pos),
                                     // NoFrustumCulling,
                                     chunk_aabb,
                                     LOD(lod),
@@ -342,6 +344,7 @@ pub fn process_mesh_queue(
                                 ))
                                 .observe(
                                     |trigger: Trigger<Pointer<Move>>,
+                                     mut building_state: ResMut<BuildingState>,
                                      mut preview_query: Query<
                                         (&mut Transform, &mut Visibility),
                                         With<BuildingPreview>,
@@ -368,7 +371,8 @@ pub fn process_mesh_queue(
                                                 preview_query.single_mut()
                                             {
                                                 transform.translation = target_voxel_pos;
-
+                                                building_state.current_position =
+                                                    Some(target_voxel_pos);
                                                 *visibility = Visibility::Visible;
                                             }
                                         }
@@ -424,9 +428,9 @@ fn setup_building_system(
     ));
 }
 #[derive(Resource, Default)]
-struct BuildingState {
-    current_position: Option<Vec3>,
-    current_normal: Option<Vec3>,
+pub struct BuildingState {
+    pub current_position: Option<Vec3>,
+    pub current_normal: Option<Vec3>,
 }
 #[derive(Component)]
 struct BuildingPreview;

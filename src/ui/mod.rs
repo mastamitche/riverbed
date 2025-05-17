@@ -7,6 +7,8 @@ use bevy::{
     window::{CursorGrabMode, SystemCursorIcon},
 };
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_inspector_egui::prelude::ReflectInspectorOptions;
+use bevy_inspector_egui::{quick::WorldInspectorPlugin, InspectorOptions};
 
 const Y_CAM_SPEED: f32 = 20.;
 pub struct UIPlugin;
@@ -15,7 +17,8 @@ impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(EguiPlugin {
             enable_multipass_for_primary_context: true,
-        });
+        })
+        .add_plugins(WorldInspectorPlugin::new());
         app.insert_resource(CameraSettings {
             fov: 40.0,
             height: 30.0,

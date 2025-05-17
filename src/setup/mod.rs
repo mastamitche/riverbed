@@ -23,7 +23,6 @@ use ui::UIPlugin;
 use world::GenPlugin;
 use world::VoxelWorld;
 
-use crate::render;
 use crate::sounds;
 use crate::ui;
 use crate::world;
@@ -31,6 +30,7 @@ use crate::{
     agents::{self, AgentsPlugin},
     controls::ActionMappingPlugin,
 };
+use crate::{interactions::PlayerInteractionsPlugin, render};
 
 pub fn create_app() {
     let mut app = App::new();
@@ -92,6 +92,7 @@ pub fn create_app() {
         .add_plugins(ActionMappingPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin)
+        .add_plugins(PlayerInteractionsPlugin)
         .add_plugins(TemporalAntiAliasPlugin)
         .add_plugins((MeshPickingPlugin)) //, DebugPickingPlugin))
         .insert_resource(DebugPickingMode::Normal)

@@ -7,6 +7,7 @@ mod agents;
 mod block;
 mod controls;
 mod gen;
+mod interactions;
 mod items;
 mod render;
 mod setup;

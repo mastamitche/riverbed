@@ -27,7 +27,7 @@ impl TrackedChunk {
         Self {
             chunk: Chunk::new(),
             ao_image: None,
-            loaded: false,
+            loaded: true,
             meshing: false,
             changed: true,
         }
@@ -256,12 +256,6 @@ impl VoxelWorld {
         if border_sign_x == 0 && border_sign_y == 0 && border_sign_z == 0 {
             return;
         }
-        // if chunk_pos.x == 8 && chunk_pos.y == 0 && chunk_pos.z == 2 {
-        //     println!(
-        //         "Adding Neighbour at chunkedpos {:?} at Chunked pos {:?} ",
-        //         chunk_pos, chunked_pos
-        //     );
-        // }
 
         // X-axis neighbors (if we're at an x-border)
         if border_sign_x != 0 {
