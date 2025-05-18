@@ -9,7 +9,7 @@ use bevy::{
         view::RenderLayers,
     },
 };
-use bevy_egui::{egui, EguiContextPass, EguiContexts, EguiUserTextures};
+use bevy_egui::{egui, EguiContextPass, EguiContexts, EguiGlobalSettings, EguiUserTextures};
 
 use crate::utils::INITIAL_FOV;
 
@@ -37,7 +37,9 @@ pub fn create_area(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut egui_user_textures: ResMut<EguiUserTextures>,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
 ) {
+    egui_global_settings.enable_absorb_bevy_input_system = true;
     let size = Extent3d {
         width: 512,
         height: 512,
@@ -201,13 +203,24 @@ fn render_to_image_example_system(
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
     let ctx = contexts.ctx_mut();
-    let mut apply = false;
-    egui::Window::new("Cube material preview").show(ctx, |ui| {
-        ui.image(egui::load::SizedTexture::new(
-            cube_preview_texture_id,
-            egui::vec2(300., 300.),
-        ));
-    });
+    egui::Window::new("Cube material preview")
+        .collapsible(false)
+        .movable(false)
+        .title_bar(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.image(egui::load::SizedTexture::new(
+                cube_preview_texture_id,
+                egui::vec2(300., 300.),
+            ));
+            if ui.ui_contains_pointer() {
+                ui.input(|i| {
+                    if i.pointer.button_down(egui::PointerButton::Secondary) {
+                        println!("Right click down")
+                    }
+                });
+            }
+        });
 
     Ok(())
 }

@@ -1,6 +1,8 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 
+use crate::render::camera::MainCamera;
+
 use super::AgentState;
 
 pub struct FreeFlyPlugin;
@@ -41,7 +43,7 @@ fn free_fly_camera_movement(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     settings: Res<FreeFlySettings>,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut query: Query<(&mut Transform, &MainCamera), With<Camera>>,
 ) {
     if !settings.enabled {
         return;
@@ -74,7 +76,7 @@ fn free_fly_camera_movement(
         direction *= SUPER_SPEED;
     }
 
-    if let Ok(mut cam) = query.single_mut() {
+    if let Ok((mut cam, _)) = query.single_mut() {
         let cam_rotation = cam.rotation;
         let movement = direction * settings.movement_speed * time.delta_secs();
         cam.translation += cam_rotation * movement;
@@ -86,7 +88,7 @@ fn free_fly_camera_rotation(
     mut motion_events: EventReader<MouseMotion>,
     settings: Res<FreeFlySettings>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut query: Query<(&mut Transform, &MainCamera), With<Camera>>,
 ) {
     if !settings.enabled || !mouse_buttons.pressed(MouseButton::Right) {
         return;
@@ -98,7 +100,7 @@ fn free_fly_camera_rotation(
     }
 
     if rotation.length_squared() > 0.0 {
-        for mut transform in query.iter_mut() {
+        if let Ok((mut transform, _)) = query.single_mut() {
             let pitch = (rotation.y * settings.rotation_speed).to_radians();
             let yaw = (rotation.x * settings.rotation_speed).to_radians();
 
