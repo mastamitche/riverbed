@@ -1,4 +1,7 @@
-use crate::agents::{AgentState, PlayerControlled};
+use crate::{
+    agents::{AgentState, PlayerControlled},
+    render::camera::MainCamera,
+};
 use bevy::{
     input::mouse::MouseWheel,
     log::tracing_subscriber::fmt::format,
@@ -128,12 +131,12 @@ pub fn adjust_camera_angle(
     camera_settings: Res<CameraSettings>,
     camera_orbit: Res<CameraOrbit>,
     mut camera_smoothing: ResMut<CameraSmoothing>,
-    mut query: Query<&mut Transform, With<Camera3d>>,
+    mut query: Query<(&mut Transform, &MainCamera), With<Camera3d>>,
     player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
     time: Res<Time>,
     windows: Query<&Window>,
 ) {
-    let mut camera_transform = query.single_mut().unwrap();
+    let (mut camera_transform, _) = query.single_mut().unwrap();
     if let Ok((_, player_transform)) = player_query.single() {
         let player_pos = player_transform.translation;
 

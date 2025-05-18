@@ -5,7 +5,7 @@ mod effects;
 mod mesh_chunks;
 mod mesh_utils;
 mod shared_load_area;
-mod sky;
+pub mod sky;
 pub mod texture_array;
 mod texture_load;
 use bevy::prelude::Plugin;

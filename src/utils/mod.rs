@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+pub const INITIAL_FOV: f32 = 40_f32.to_radians();
+
 pub fn timeit<F: Fn() -> T, T>(description: &str, f: F) -> T {
     let start = Instant::now();
     let result = f();

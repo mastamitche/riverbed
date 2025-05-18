@@ -12,6 +12,7 @@ mod gen;
 mod interactions;
 mod items;
 mod render;
+mod scenes;
 mod setup;
 mod sounds;
 mod ui;

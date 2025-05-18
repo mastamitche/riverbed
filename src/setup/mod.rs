@@ -7,6 +7,7 @@ use bevy::{
     core_pipeline::experimental::taa::TemporalAntiAliasPlugin,
     image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
     prelude::*,
+    remote::{http::RemoteHttpPlugin, RemotePlugin},
     render::{
         settings::{Backends, RenderCreation, WgpuSettings},
         RenderPlugin,
@@ -23,7 +24,6 @@ use ui::UIPlugin;
 use world::GenPlugin;
 use world::VoxelWorld;
 
-use crate::sounds;
 use crate::ui;
 use crate::world;
 use crate::{
@@ -31,6 +31,7 @@ use crate::{
     controls::ActionMappingPlugin,
 };
 use crate::{interactions::PlayerInteractionsPlugin, render};
+use crate::{scenes::ScenesPlugin, sounds};
 
 pub fn create_app() {
     let mut app = App::new();
@@ -94,7 +95,10 @@ pub fn create_app() {
         .add_plugins(SoundPlugin)
         .add_plugins(PlayerInteractionsPlugin)
         .add_plugins(TemporalAntiAliasPlugin)
+        .add_plugins(ScenesPlugin)
         .add_plugins((MeshPickingPlugin)) //, DebugPickingPlugin))
+        .add_plugins(RemotePlugin::default())
+        .add_plugins(RemoteHttpPlugin::default())
         .insert_resource(DebugPickingMode::Normal)
         .run();
 }

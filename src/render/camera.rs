@@ -1,4 +1,4 @@
-use crate::agents::PlayerSpawn;
+use crate::{agents::PlayerSpawn, utils::INITIAL_FOV};
 use bevy::{
     core_pipeline::experimental::taa::TemporalAntiAliasing, pbr::ScreenSpaceAmbientOcclusion,
     prelude::*,
@@ -20,9 +20,10 @@ impl Plugin for Camera3dPlugin {
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CameraSpawn;
 
+#[derive(Component)]
+pub struct MainCamera;
+
 pub fn cam_setup(mut commands: Commands) {
-    let initial_angle_degrees: f32 = 40.0;
-    let initial_angle: f32 = initial_angle_degrees.to_radians();
     commands
         .spawn((
             Camera {
@@ -32,12 +33,13 @@ pub fn cam_setup(mut commands: Commands) {
             Camera3d::default(),
             Transform::from_xyz(0., 0., 0.),
             Projection::Perspective(PerspectiveProjection {
-                fov: initial_angle,
+                fov: INITIAL_FOV,
                 ..Default::default()
             }),
             Msaa::Off,
             ScreenSpaceAmbientOcclusion::default(),
             TemporalAntiAliasing::default(),
+            MainCamera
         ))
         //b
         ;

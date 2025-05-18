@@ -24,6 +24,7 @@ bevy = { version = "0.16" ,default-features = true, features = [
     "bevy_state",
     "bevy_text",
     "bevy_ui",
+    "bevy_remote",
 ]  }
 bevy_picking = "0.16"
 bevy_dev_tools = "0.16"

@@ -9,10 +9,9 @@ const C: f32 = DAY_LENGTH_MINUTES * 120. * PI;
 struct CycleTimer(Timer);
 
 #[derive(Component)]
-struct Sun;
+pub struct Sun;
 
-fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<Camera3d>>) {
-    let cam = cam_query.single().unwrap();
+fn spawn_sun(mut commands: Commands) {
     commands.spawn((
         Sun,
         DirectionalLight {
