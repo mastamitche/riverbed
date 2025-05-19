@@ -1,6 +1,7 @@
 use crate::{
     agents::{AgentState, PlayerControlled},
-    render::camera::MainCamera,
+    render::camera::{MainCamera, Y_CAM_SPEED},
+    utils::lerp,
 };
 use bevy::{
     input::mouse::MouseWheel,
@@ -12,7 +13,6 @@ use bevy::{
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-const Y_CAM_SPEED: f32 = 20.;
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
@@ -29,12 +29,6 @@ impl Plugin for UIPlugin {
             height: 30.0,
             x_z_offset: 10.0,
         })
-        .insert_resource(CameraSmoothing::default())
-        .insert_resource(CameraOrbit {
-            angle: std::f32::consts::PI / 4.0,
-            dragging: false,
-            last_cursor_pos: Vec2::ZERO,
-        })
         .add_systems(
             Update,
             (
@@ -50,15 +44,15 @@ impl Plugin for UIPlugin {
         );
     }
 }
-#[derive(Resource)]
+#[derive(Component)]
 pub struct CameraSmoothing {
-    target_y: f32,
-    current_y: f32,
-    smoothing_factor: f32,
+    pub target_y: f32,
+    pub current_y: f32,
+    pub smoothing_factor: f32,
     // Define the target box dimensions (as a percentage of screen)
-    target_box_width: f32,  // e.g., 0.2 means 20% of screen width
-    target_box_height: f32, // e.g., 0.2 means 20% of screen height
-    last_player_pos: Vec3,  // Track last position to calculate movement
+    pub target_box_width: f32,  // e.g., 0.2 means 20% of screen width
+    pub target_box_height: f32, // e.g., 0.2 means 20% of screen height
+    pub last_player_pos: Vec3,  // Track last position to calculate movement
 }
 
 impl Default for CameraSmoothing {
@@ -74,27 +68,30 @@ impl Default for CameraSmoothing {
     }
 }
 
-#[derive(Resource)]
+#[derive(Component)]
 pub struct CameraOrbit {
     pub angle: f32,            // Current orbital angle (yaw)
+    pub pitch: f32,            // Current pitch
     pub dragging: bool,        // Whether we're currently dragging
     pub last_cursor_pos: Vec2, // Last cursor position for delta calculation
 }
 #[derive(Resource)]
 pub struct CameraSettings {
-    fov: f32,
-    height: f32,
-    x_z_offset: f32,
+    pub fov: f32,
+    pub height: f32,
+    pub x_z_offset: f32,
 }
 
 // Add this system to handle mouse input for camera rotation
 fn handle_camera_rotation(
-    mut camera_orbit: ResMut<CameraOrbit>,
+    mut query: Query<(&mut Transform, &mut CameraOrbit, &MainCamera), With<Camera3d>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut cursor_moved_events: EventReader<CursorMoved>,
     windows: Query<&Window>,
 ) {
     if let Ok(window) = windows.single() {
+        let (_, mut camera_orbit, _) = query.single_mut().unwrap();
+
         // Start dragging when right mouse button is pressed
         if mouse_button_input.just_pressed(MouseButton::Right) {
             camera_orbit.dragging = true;
@@ -131,14 +128,21 @@ fn handle_camera_rotation(
 
 pub fn adjust_camera_angle(
     camera_settings: Res<CameraSettings>,
-    camera_orbit: Res<CameraOrbit>,
-    mut camera_smoothing: ResMut<CameraSmoothing>,
-    mut query: Query<(&mut Transform, &MainCamera), With<Camera3d>>,
+    mut query: Query<
+        (
+            &mut Transform,
+            &mut CameraOrbit,
+            &mut CameraSmoothing,
+            &MainCamera,
+        ),
+        With<Camera3d>,
+    >,
     player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
     time: Res<Time>,
     windows: Query<&Window>,
 ) {
-    let (mut camera_transform, _) = query.single_mut().unwrap();
+    let (mut camera_transform, mut camera_orbit, mut camera_smoothing, _) =
+        query.single_mut().unwrap();
     if let Ok((_, player_transform)) = player_query.single() {
         let player_pos = player_transform.translation;
 
@@ -203,11 +207,6 @@ pub fn adjust_camera_angle(
         // Look at player position
         camera_transform.look_at(player_pos, Vec3::Y);
     }
-}
-
-// Helper function for linear interpolation
-fn lerp(start: f32, end: f32, t: f32) -> f32 {
-    start + (end - start) * t.clamp(0.0, 1.0)
 }
 
 fn ui_camera_system(

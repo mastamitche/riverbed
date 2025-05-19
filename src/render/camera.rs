@@ -1,9 +1,14 @@
-use crate::{agents::PlayerSpawn, utils::INITIAL_FOV};
+use crate::{
+    agents::PlayerSpawn,
+    ui::{CameraOrbit, CameraSmoothing},
+    utils::INITIAL_FOV,
+};
 use bevy::{
     core_pipeline::experimental::taa::TemporalAntiAliasing, pbr::ScreenSpaceAmbientOcclusion,
     prelude::*,
 };
 
+pub const Y_CAM_SPEED: f32 = 20.;
 pub struct Camera3dPlugin;
 
 impl Plugin for Camera3dPlugin {
@@ -36,6 +41,13 @@ pub fn cam_setup(mut commands: Commands) {
                 fov: INITIAL_FOV,
                 ..Default::default()
             }),
+            CameraOrbit {
+                angle: std::f32::consts::PI / 4.0,
+                dragging: false,
+                pitch: 0.,
+                last_cursor_pos: Vec2::ZERO,
+            },
+            CameraSmoothing::default(),
             Msaa::Off,
             ScreenSpaceAmbientOcclusion::default(),
             TemporalAntiAliasing::default(),

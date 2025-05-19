@@ -29,3 +29,8 @@ pub fn timeit_mut<F: FnMut() -> T, T>(description: &str, mut f: F) -> T {
     );
     result
 }
+
+// Helper function for linear interpolation
+pub fn lerp(start: f32, end: f32, t: f32) -> f32 {
+    start + (end - start) * t.clamp(0.0, 1.0)
+}
