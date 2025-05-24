@@ -1,3 +1,5 @@
+use std::default;
+
 use crate::{
     controls::action_mapping::{ActionState, GameAction},
     render::draw_chunks::BuildingState,
@@ -10,6 +12,13 @@ use bevy::prelude::*;
 pub struct PlaceBlockEvent {
     pub pos: Pos3d<1>,
     pub block: Block,
+    pub destination: PlaceDestination,
+}
+#[derive(Default, Debug)]
+pub enum PlaceDestination {
+    #[default]
+    World,
+    Builder,
 }
 
 pub fn read_general_event(
@@ -27,6 +36,7 @@ pub fn read_general_event(
             place_events.write(PlaceBlockEvent {
                 pos: p,
                 block: Block::AcaciaLeaves,
+                destination: PlaceDestination::World,
             });
         }
     }
