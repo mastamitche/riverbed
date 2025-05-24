@@ -1,8 +1,5 @@
 use super::{chunked, un_padded_chunked, unchunked, ColPos, CHUNK_S1I};
-use crate::{
-    world::{Realm, CHUNK_S1},
-    Block,
-};
+use crate::{world::CHUNK_S1, Block};
 use bevy::prelude::Vec3;
 use std::fmt::{Display, Formatter, Result};
 use std::ops::{Add, BitXor};
@@ -12,11 +9,10 @@ pub struct Pos3d<const U: usize> {
     pub x: i32,
     pub y: i32,
     pub z: i32,
-    pub realm: Realm,
 }
 impl<const U: usize> Pos3d<U> {
-    pub fn new(x: i32, y: i32, z: i32, realm: Realm) -> Self {
-        Self { x, y, z, realm }
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
+        Self { x, y, z }
     }
 }
 
@@ -55,21 +51,13 @@ pub type ChunkedPos = (usize, usize, usize);
 
 impl Display for BlockPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(
-            f,
-            "BlockPos({}, {}, {}, {:?})",
-            self.x, self.y, self.z, self.realm
-        )
+        write!(f, "BlockPos({}, {}, {})", self.x, self.y, self.z)
     }
 }
 
 impl Display for ChunkPos {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(
-            f,
-            "ChunkPos({}, {}, {}, {:?})",
-            self.x, self.y, self.z, self.realm
-        )
+        write!(f, "ChunkPos({}, {}, {})", self.x, self.y, self.z)
     }
 }
 
@@ -83,20 +71,18 @@ impl BlockPos {
                 x: cx,
                 y: cy,
                 z: cz,
-                realm: block_pos.realm,
             },
             (dx, dy, dz),
         )
     }
 }
 
-impl From<(Vec3, Realm)> for BlockPos {
-    fn from((pos, realm): (Vec3, Realm)) -> Self {
+impl From<Vec3> for BlockPos {
+    fn from(pos: Vec3) -> Self {
         BlockPos {
             x: (pos.x * 8.0).floor() as i32,
             y: (pos.y * 8.0).floor() as i32,
             z: (pos.z * 8.0).floor() as i32,
-            realm,
         }
     }
 }
@@ -119,7 +105,6 @@ impl Add<Vec3> for BlockPos {
             x: self.x + (rhs.x * 8.0).floor() as i32,
             y: self.y + (rhs.y * 8.0).floor() as i32,
             z: self.z + (rhs.z * 8.0).floor() as i32,
-            realm: self.realm,
         }
     }
 }
@@ -132,7 +117,6 @@ impl Add<(i32, i32, i32)> for BlockPos {
             x: self.x + dx,
             y: self.y + dy,
             z: self.z + dz,
-            realm: self.realm,
         }
     }
 }
@@ -143,7 +127,6 @@ impl From<(ChunkPos, ChunkedPos)> for BlockPos {
             x: unchunked(chunk_pos.x, dx),
             y: unchunked(chunk_pos.y, dy),
             z: unchunked(chunk_pos.z, dz),
-            realm: chunk_pos.realm,
         }
     }
 }
@@ -158,7 +141,6 @@ impl From<BlockPos> for (ChunkPos, ChunkedPos) {
                 x: cx,
                 y: cy,
                 z: cz,
-                realm: block_pos.realm,
             },
             (dx, dy, dz),
         )
@@ -171,7 +153,6 @@ impl From<(ColPos, (usize, i32, usize))> for BlockPos {
             x: unchunked(col_pos.x, dx),
             y,
             z: unchunked(col_pos.z, dz),
-            realm: col_pos.realm,
         }
     }
 }
@@ -180,14 +161,7 @@ impl From<BlockPos> for (ColPos, (usize, i32, usize)) {
     fn from(block_pos: BlockPos) -> Self {
         let (cx, dx) = chunked(block_pos.x);
         let (cz, dz) = chunked(block_pos.z);
-        (
-            ColPos {
-                x: cx,
-                z: cz,
-                realm: block_pos.realm,
-            },
-            (dx, block_pos.y, dz),
-        )
+        (ColPos { x: cx, z: cz }, (dx, block_pos.y, dz))
     }
 }
 
@@ -200,7 +174,6 @@ impl From<BlockPos> for ChunkPos {
             x: cx,
             y: cy,
             z: cz,
-            realm: block_pos.realm,
         }
     }
 }

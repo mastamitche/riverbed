@@ -2,7 +2,6 @@ mod chunk;
 mod load_area;
 mod load_orders;
 mod pos;
-mod realm;
 mod utils;
 mod voxel_world;
 
@@ -23,7 +22,6 @@ pub use chunk::*;
 pub use load_area::{range_around, PlayerArea, RenderDistance};
 pub use load_orders::{BlockEntities, ColUnloadEvent, LoadOrders};
 pub use pos::*;
-pub use realm::*;
 pub use voxel_world::*;
 pub const CHUNK_S1: usize = 62;
 pub const CHUNK_S2: usize = CHUNK_S1.pow(2);

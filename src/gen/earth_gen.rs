@@ -67,7 +67,6 @@ impl Earth {
                                     x: abs_x,
                                     y,
                                     z: abs_z,
-                                    realm: state.col_pos.realm,
                                 };
                                 world.set_block(pos, Block::AcaciaLeaves);
                             }
@@ -77,7 +76,6 @@ impl Earth {
                                 x: abs_x,
                                 y: top_height,
                                 z: abs_z,
-                                realm: state.col_pos.realm,
                             };
                             world.set_block(grass_pos, Block::AcaciaLeaves);
 
@@ -120,7 +118,6 @@ impl Earth {
                             x: state.col_pos.x,
                             y: state.current_x as i32,
                             z: state.col_pos.z,
-                            realm: state.col_pos.realm,
                         };
 
                         let loaded = world.set_loaded(chunk_pos);

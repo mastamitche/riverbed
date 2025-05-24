@@ -1,7 +1,7 @@
 use super::block_action::BlockActionPlugin;
 use super::AgentState;
 use crate::controls::action_mapping::{ActionState, GameAction};
-use crate::world::{BlockPos, BlockRayCastHit, Realm, VoxelWorld};
+use crate::world::{BlockPos, BlockRayCastHit, VoxelWorld};
 use crate::{world::RenderDistance, Block};
 use avian3d::prelude::{Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody};
 use bevy::{math::Vec3, prelude::*};
@@ -85,8 +85,6 @@ pub fn spawn_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let realm = Realm::Overworld;
-
     let rd = RenderDistance(7);
     let player_model = commands
         .spawn((
@@ -102,7 +100,6 @@ pub fn spawn_player(
                 ..default()
             },
             Visibility::default(),
-            realm,
             rd,
             TargetBlock(None),
             PlayerControlled,
@@ -176,7 +173,7 @@ pub fn move_player(
         // Part 2: Handle physics (gravity and step-up)
         // Check if player is on ground
         let below_pos = player_pos + Vec3::new(0.0, -1.05, 0.0);
-        let block_below = world.get_block_safe(BlockPos::from((below_pos, Realm::Overworld)));
+        let block_below = world.get_block_safe(BlockPos::from((below_pos)));
         let on_ground = block_below != Block::Air;
 
         // Handle jumping
@@ -188,13 +185,11 @@ pub fn move_player(
         if on_ground && (velocity.0.x.abs() + velocity.0.z.abs() > 0.1) {
             let movement_dir = Vec3::new(velocity.0.x, 0.0, velocity.0.z).normalize();
             let step_pos = player_pos + movement_dir * 0.8 + Vec3::new(0.0, 0.5, 0.0);
-            let step_block = world.get_block_safe(BlockPos::from((step_pos, Realm::Overworld)));
+            let step_block = world.get_block_safe(BlockPos::from((step_pos)));
 
             if step_block == Block::Air
-                && world.get_block_safe(BlockPos::from((
-                    step_pos + Vec3::new(0.0, -0.5, 0.0),
-                    Realm::Overworld,
-                ))) != Block::Air
+                && world.get_block_safe(BlockPos::from((step_pos + Vec3::new(0.0, -0.5, 0.0))))
+                    != Block::Air
             {
                 // Found a step, apply gentle upward velocity
                 velocity.0.y = 5.0;

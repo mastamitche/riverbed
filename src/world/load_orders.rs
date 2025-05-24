@@ -1,7 +1,6 @@
 use super::BlockPos;
 use super::{
-    pos2d::Pos2d, utils::ReinsertTrait, ColPos, PlayerArea, Realm, RenderDistance, VoxelWorld,
-    CHUNK_S1,
+    pos2d::Pos2d, utils::ReinsertTrait, ColPos, PlayerArea, RenderDistance, VoxelWorld, CHUNK_S1,
 };
 use bevy::prelude::*;
 use itertools::Itertools;
@@ -117,12 +116,12 @@ impl LoadOrders {
 
 pub fn assign_load_area(
     mut commands: Commands,
-    mut query: Query<(Entity, &Transform, &Realm, &RenderDistance)>,
+    mut query: Query<(Entity, &Transform, &RenderDistance)>,
     mut col_orders: ResMut<LoadOrders>,
 ) {
-    if let Ok((player, transform, realm, render_dist)) = query.single_mut() {
+    if let Ok((player, transform, render_dist)) = query.single_mut() {
         let scaled_translation = transform.translation * 8.0;
-        let col = ColPos::from((scaled_translation, *realm));
+        let col = ColPos::from(scaled_translation);
         let old_load_area = PlayerArea::empty();
         let new_load_area = PlayerArea::new(col, *render_dist);
         col_orders.on_load_area_change(player.index(), &old_load_area, &new_load_area);
@@ -131,12 +130,12 @@ pub fn assign_load_area(
 }
 
 pub fn update_load_area(
-    mut query: Query<(Entity, &Transform, &Realm, &RenderDistance)>,
+    mut query: Query<(Entity, &Transform, &RenderDistance)>,
     mut col_orders: ResMut<LoadOrders>,
     mut load_area: ResMut<PlayerArea>,
 ) {
-    for (player, transform, realm, render_dist) in query.iter_mut() {
-        let col = ColPos::from((transform.translation, *realm));
+    for (player, transform, render_dist) in query.iter_mut() {
+        let col = ColPos::from(transform.translation);
         // we're checking before modifying to avoid triggering unnecessary Change detection
         if col != load_area.center {
             let new_load_area = PlayerArea::new(col, *render_dist);

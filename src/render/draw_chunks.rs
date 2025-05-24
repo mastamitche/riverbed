@@ -35,6 +35,9 @@ struct VoxelPlacementEvent {
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
 
+#[derive(Debug, Component)]
+pub struct WorldMesh;
+
 fn choose_lod_level(chunk_dist: u32) -> usize {
     1
 }
@@ -337,6 +340,7 @@ pub fn process_mesh_queue(
                                         should_block_lower: true,
                                         is_hoverable: true,
                                     },
+                                    WorldMesh,
                                     //SimplifiedMesh(mesh_handle),
                                     //Physics
                                     RigidBody::Static, // Static for terrain
@@ -433,7 +437,7 @@ pub struct BuildingState {
     pub current_normal: Option<Vec3>,
 }
 #[derive(Component)]
-struct BuildingPreview;
+pub struct BuildingPreview;
 
 #[derive(Resource)]
 pub struct ChunkEntities(pub HashMap<ChunkPos, Entity>);

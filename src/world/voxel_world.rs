@@ -1,6 +1,6 @@
 use super::{
     chunked, pos2d::chunks_in_col, BlockPos, BlockPos2d, Chunk, ChunkPos, ChunkedPos, ColPos,
-    ColedPos, Realm, CHUNKP_S1, CHUNK_S1, CHUNK_S1I, MAX_HEIGHT, Y_CHUNKS,
+    ColedPos, CHUNKP_S1, CHUNK_S1, CHUNK_S1I, MAX_HEIGHT, Y_CHUNKS,
 };
 use crate::{world::chunk, Block};
 use bevy::{
@@ -138,7 +138,6 @@ impl VoxelWorld {
                 x: base_x,
                 y,
                 z: base_z,
-                realm: col_pos.realm,
             };
 
             self.set_block(pos, block);
@@ -180,7 +179,6 @@ impl VoxelWorld {
                 x: col_pos.x,
                 y,
                 z: col_pos.z,
-                realm: col_pos.realm,
             };
             if let Some(chunk) = self.chunks.get(&chunk_pos) {
                 let (block, block_y) = chunk.top(pos2d);
@@ -192,14 +190,13 @@ impl VoxelWorld {
         (Block::Air, 0)
     }
 
-    pub fn is_col_loaded(&self, player_pos: Vec3, realm: Realm) -> bool {
-        let (chunk_pos, _): (ChunkPos, _) = <BlockPos>::from((player_pos, realm)).into();
+    pub fn is_col_loaded(&self, player_pos: Vec3) -> bool {
+        let (chunk_pos, _): (ChunkPos, _) = <BlockPos>::from(player_pos).into();
         for y in (0..Y_CHUNKS as i32).rev() {
             let chunk = ChunkPos {
                 x: chunk_pos.x,
                 y,
                 z: chunk_pos.z,
-                realm: chunk_pos.realm,
             };
             if self.chunks.contains_key(&chunk) {
                 return true;
@@ -221,7 +218,6 @@ impl VoxelWorld {
                 x: col.x,
                 y,
                 z: col.z,
-                realm: col.realm,
             };
             self.chunks.remove(&chunk_pos);
         }
@@ -263,7 +259,6 @@ impl VoxelWorld {
                 x: chunk_pos.x + border_sign_x,
                 y: chunk_pos.y,
                 z: chunk_pos.z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -285,7 +280,6 @@ impl VoxelWorld {
                 x: chunk_pos.x,
                 y: chunk_pos.y + border_sign_y,
                 z: chunk_pos.z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -305,7 +299,6 @@ impl VoxelWorld {
                 x: chunk_pos.x,
                 y: chunk_pos.y,
                 z: chunk_pos.z + border_sign_z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_z = if border_sign_z < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -328,7 +321,6 @@ impl VoxelWorld {
                 x: chunk_pos.x + border_sign_x,
                 y: chunk_pos.y + border_sign_y,
                 z: chunk_pos.z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -344,7 +336,6 @@ impl VoxelWorld {
                 x: chunk_pos.x + border_sign_x,
                 y: chunk_pos.y,
                 z: chunk_pos.z + border_sign_z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -360,7 +351,6 @@ impl VoxelWorld {
                 x: chunk_pos.x,
                 y: chunk_pos.y + border_sign_y,
                 z: chunk_pos.z + border_sign_z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_y = if border_sign_y < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -376,7 +366,6 @@ impl VoxelWorld {
                 x: chunk_pos.x + border_sign_x,
                 y: chunk_pos.y + border_sign_y,
                 z: chunk_pos.z + border_sign_z,
-                realm: chunk_pos.realm,
             };
 
             let neighbor_x = if border_sign_x < 0 { CHUNKP_S1 - 1 } else { 0 };
@@ -412,15 +401,8 @@ impl VoxelWorld {
         self.mark_change_single(neighbor_chunk_pos);
     }
 
-    pub fn raycast(
-        &self,
-        realm: Realm,
-        start: Vec3,
-        dir: Vec3,
-        dist: f32,
-    ) -> Option<BlockRayCastHit> {
+    pub fn raycast(&self, start: Vec3, dir: Vec3, dist: f32) -> Option<BlockRayCastHit> {
         let mut pos = BlockPos {
-            realm,
             x: start.x.floor() as i32,
             y: start.y.floor() as i32,
             z: start.z.floor() as i32,

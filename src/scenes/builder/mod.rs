@@ -1,6 +1,7 @@
 use bevy::{
     asset::RenderAssetUsages,
     core_pipeline::experimental::taa::TemporalAntiAliasing,
+    ecs::observer::TriggerTargets,
     pbr::ScreenSpaceAmbientOcclusion,
     prelude::*,
     render::{
@@ -8,20 +9,30 @@ use bevy::{
         render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
         view::RenderLayers,
     },
+    transform::commands,
 };
 use bevy_egui::{egui, EguiContextPass, EguiContexts, EguiGlobalSettings, EguiUserTextures};
+use builder_chunk::BuilderChunk;
+use itertools::Itertools;
 
 use crate::{
-    render::camera::Y_CAM_SPEED,
+    interactions::place::PlaceBlockEvent,
+    render::{
+        camera::Y_CAM_SPEED,
+        draw_chunks::{BuildingPreview, BuildingState, WorldMesh},
+    },
+    setup::Block,
     ui::{CameraOrbit, CameraSettings, CameraSmoothing},
     utils::{lerp, INITIAL_FOV},
+    world::pos3d::Pos3d,
 };
-
+pub mod builder_chunk;
 pub const BUILDER_Y: f32 = 1000.0;
 pub struct BuilderPlugin;
 impl Plugin for BuilderPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app
+            .init_resource::<BuilderChunk>()
             .add_systems(Startup, create_area)
             .add_systems(
                 EguiContextPass,
@@ -64,11 +75,9 @@ pub fn create_area(
         TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT;
 
     let image_handle = images.add(image);
-    let first_pass_layer = RenderLayers::layer(1);
 
     egui_user_textures.add_image(image_handle.clone());
     commands.insert_resource(EditorRenderTexture(image_handle.clone()));
-    let preview_pass_layer = RenderLayers::layer(1);
     // Spawn a secondary camera
     commands
         .spawn((
@@ -97,10 +106,8 @@ pub fn create_area(
             ScreenSpaceAmbientOcclusion::default(),
             TemporalAntiAliasing::default(),
             BuildCamera,
-            first_pass_layer,
         ))
-        .insert(Name::new("Builder Camera"))
-        .insert(preview_pass_layer.clone());
+        .insert(Name::new("Builder Camera"));
 
     let black_material = materials.add(StandardMaterial {
         base_color: Color::BLACK,
@@ -108,113 +115,110 @@ pub fn create_area(
         ..default()
     });
 
-    let horizontal_panel = Mesh3d(meshes.add(Cuboid::new(100.0, 10.0, 100.0)));
+    let horizontal_panel = Mesh3d(meshes.add(Cuboid::new(100.0, 1.0, 100.0)));
 
-    let vertical_panel_xz = Mesh3d(meshes.add(Cuboid::new(100.0, 100.0, 10.0)));
-    let vertical_panel_yz = Mesh3d(meshes.add(Cuboid::new(10.0, 100.0, 100.0)));
+    let vertical_panel_xz = Mesh3d(meshes.add(Cuboid::new(100.0, 100.0, 1.0)));
+    let vertical_panel_yz = Mesh3d(meshes.add(Cuboid::new(1.0, 100.0, 100.0)));
 
     let inner_size = 62.0;
     let half_size = inner_size / 2.0;
 
     // Top face
-    commands
-        .spawn((
-            horizontal_panel.clone(),
-            MeshMaterial3d(black_material.clone()),
-            Transform::from_xyz(0.0, BUILDER_Y + half_size, 0.0),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: false,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        horizontal_panel.clone(),
+        MeshMaterial3d(black_material.clone()),
+        Transform::from_xyz(0.0, BUILDER_Y + half_size, 0.0),
+        WorldMesh,
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 
     // Bottom face
-    commands
-        .spawn((
-            horizontal_panel,
-            MeshMaterial3d(black_material.clone()),
-            Transform::from_xyz(0.0, BUILDER_Y - half_size, 0.0),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: false,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        horizontal_panel,
+        MeshMaterial3d(black_material.clone()),
+        Transform::from_xyz(0.0, BUILDER_Y - half_size, 0.0),
+        WorldMesh,
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 
     // Front face (Z+)
-    commands
-        .spawn((
-            vertical_panel_xz.clone(),
-            MeshMaterial3d(black_material.clone()),
-            Transform::from_xyz(0.0, BUILDER_Y, half_size),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: false,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        vertical_panel_xz.clone(),
+        MeshMaterial3d(black_material.clone()),
+        Transform::from_xyz(0.0, BUILDER_Y, half_size),
+        WorldMesh,
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 
     // Back face (Z-)
-    commands
-        .spawn((
-            vertical_panel_xz,
-            MeshMaterial3d(black_material.clone()),
-            Transform::from_xyz(0.0, BUILDER_Y, -half_size),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: false,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        vertical_panel_xz,
+        MeshMaterial3d(black_material.clone()),
+        Transform::from_xyz(0.0, BUILDER_Y, -half_size),
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 
     // Left face (X-)
-    commands
-        .spawn((
-            vertical_panel_yz.clone(),
-            MeshMaterial3d(black_material.clone()),
-            Transform::from_xyz(-half_size, BUILDER_Y, 0.0),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: false,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        vertical_panel_yz.clone(),
+        MeshMaterial3d(black_material.clone()),
+        Transform::from_xyz(-half_size, BUILDER_Y, 0.0),
+        WorldMesh,
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 
     // Right face (X+)
-    commands
-        .spawn((
-            vertical_panel_yz,
-            MeshMaterial3d(black_material),
-            Transform::from_xyz(half_size, BUILDER_Y, 0.0),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: false,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        vertical_panel_yz,
+        MeshMaterial3d(black_material),
+        Transform::from_xyz(half_size, BUILDER_Y, 0.0),
+        WorldMesh,
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 
     let red_cube = Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0)));
-    commands
-        .spawn((
-            red_cube.clone(),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgba(1.0, 0.0, 0.0, 1.0),
-                ..default()
-            })),
-            Transform::from_xyz(0., BUILDER_Y, 0.),
-            Pickable {
-                should_block_lower: true,
-                is_hoverable: true,
-            },
-        ))
-        .insert(preview_pass_layer.clone());
+    commands.spawn((
+        red_cube.clone(),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.0, 0.0, 1.0),
+            ..default()
+        })),
+        WorldMesh,
+        Transform::from_xyz(0., BUILDER_Y, 0.),
+        Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        },
+    ));
 }
 
 fn render_to_image_example_system(
+    mesh_pickable_query: Query<(), With<WorldMesh>>,
     cube_preview_image: Res<EditorRenderTexture>,
-    mut query: Query<(&mut Transform, &mut CameraOrbit, &BuildCamera), With<Camera3d>>,
+    mut query: Query<(&GlobalTransform, &mut CameraOrbit, &BuildCamera, &Camera)>,
     mut contexts: EguiContexts,
+    mut building_state: ResMut<BuildingState>,
+    mut ray_cast: MeshRayCast,
+    mut preview_query: Query<(&mut Transform, &mut Visibility), With<BuildingPreview>>,
+    mut place_events: EventWriter<PlaceBlockEvent>,
 ) -> Result {
     let cube_preview_texture_id = contexts.image_id(&cube_preview_image).unwrap();
 
@@ -225,13 +229,15 @@ fn render_to_image_example_system(
         .title_bar(false)
         .resizable(false)
         .show(ctx, |ui| {
-            ui.image(egui::load::SizedTexture::new(
+            let image_size = egui::vec2(512., 512.);
+            let response = ui.image(egui::load::SizedTexture::new(
                 cube_preview_texture_id,
-                egui::vec2(300., 300.),
+                image_size,
             ));
             if ui.ui_contains_pointer() {
                 ui.input(|i| {
-                    let (_, mut camera_orbit, _) = query.single_mut().unwrap();
+                    let (camera_global_transform, mut camera_orbit, _, camera) =
+                        query.single_mut().unwrap();
                     if i.pointer.button_down(egui::PointerButton::Secondary) {
                         camera_orbit.dragging = true;
                         let latest_pos = i.pointer.latest_pos().unwrap();
@@ -257,6 +263,68 @@ fn render_to_image_example_system(
                         camera_orbit.last_cursor_pos = Vec2::new(latest_pos.x, latest_pos.y);
                     } else {
                         camera_orbit.dragging = false;
+                    }
+                    if let Some(pos) = i.pointer.hover_pos() {
+                        // Calculate position relative to the image
+                        let image_rect = response.rect;
+                        let camera_viewport_rect = camera.logical_viewport_rect().unwrap();
+                        // First convert to normalized coordinates (0 to 1) within the image
+                        let normalized_x = (pos.x - image_rect.min.x) / image_rect.width()
+                            * camera_viewport_rect.width();
+                        let normalized_y = (pos.y - image_rect.min.y) / image_rect.height()
+                            * camera_viewport_rect.height();
+
+                        if let Ok(ray) = camera.viewport_to_world(
+                            camera_global_transform,
+                            Vec2::new(normalized_x, normalized_y),
+                        ) {
+                            let visibility = RayCastVisibility::Any;
+                            let filter = |entity| mesh_pickable_query.contains(entity);
+                            let settings = MeshRayCastSettings::default()
+                                .with_filter(&filter)
+                                .with_visibility(visibility);
+
+                            // Cast the ray with the settings
+                            if let Some(hit) = ray_cast.cast_ray(ray, &settings).first() {
+                                //println!("Hit: {:?}", hit);
+
+                                let voxel_size = 0.125;
+                                let half_voxel_size = voxel_size / 2.0;
+                                let world_position = hit.1.point;
+
+                                let target_voxel_pos = Vec3::new(
+                                    (world_position.x / voxel_size).floor() * voxel_size
+                                        + half_voxel_size,
+                                    (world_position.y / voxel_size).floor() * voxel_size
+                                        + half_voxel_size,
+                                    (world_position.z / voxel_size).floor() * voxel_size
+                                        + half_voxel_size,
+                                );
+
+                                if let Ok((mut transform, mut visibility)) =
+                                    preview_query.single_mut()
+                                {
+                                    transform.translation = world_position;
+                                    building_state.current_position = Some(target_voxel_pos);
+                                    *visibility = Visibility::Visible;
+                                }
+                            }
+                        }
+                    }
+
+                    if i.pointer.primary_released() {
+                        if let Some(pos) = building_state.current_position {
+                            println!("Placing block at {pos:?}");
+                            let p: Pos3d<1> = Pos3d {
+                                x: (pos.x * 8.) as i32,
+                                y: (pos.y * 8.) as i32,
+                                z: (pos.z * 8.) as i32,
+                            };
+                            place_events.write(PlaceBlockEvent {
+                                pos: p,
+                                block: Block::AcaciaLeaves,
+                            });
+                        }
                     }
                 });
             }

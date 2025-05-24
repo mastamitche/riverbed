@@ -25,11 +25,7 @@ impl PlayerArea {
             col_dists: iproduct!(range_around(center.x, dist), range_around(center.z, dist))
                 .map(|(x, z)| {
                     (
-                        ColPos {
-                            x,
-                            z,
-                            realm: center.realm,
-                        },
+                        ColPos { x, z },
                         x.abs_diff(center.x).max(z.abs_diff(center.z)),
                     )
                 })
