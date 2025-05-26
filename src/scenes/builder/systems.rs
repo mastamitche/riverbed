@@ -19,12 +19,19 @@ use crate::{
     setup::Block,
     ui::{CameraOrbit, CameraSettings, CameraSmoothing},
     utils::{lerp, INITIAL_FOV},
-    world::pos3d::Pos3d,
+    world::{pos3d::Pos3d, CHUNK_S1, CHUNK_S1F},
 };
 
 use super::builder_chunk;
 
-pub const BUILDER_Y: f32 = 1054.0;
+pub const BUILDER_Y: f32 = 992.0;
+pub const BUILDER_Y_I: i32 = 992 / CHUNK_S1 as i32;
+pub const BUILDER_CHUNK_POS: Pos3d<CHUNK_S1> = Pos3d {
+    x: 0,
+    y: BUILDER_Y_I,
+    z: 0,
+};
+pub const BUILDER_CHUNK_POS_V3: Vec3 = Vec3::new(0., BUILDER_Y, 0.);
 
 #[derive(Deref, Resource)]
 pub struct EditorRenderTexture(Handle<Image>);
@@ -39,6 +46,8 @@ pub fn create_area(
     mut egui_user_textures: ResMut<EguiUserTextures>,
     mut egui_global_settings: ResMut<EguiGlobalSettings>,
 ) {
+    let inner_size = CHUNK_S1F;
+    let half_size = inner_size / 2.;
     egui_global_settings.enable_absorb_bevy_input_system = true;
     let size = Extent3d {
         width: 512,
@@ -77,9 +86,17 @@ pub fn create_area(
                 dragging: false,
                 last_cursor_pos: Vec2::ZERO,
             },
+            CameraSettings {
+                fov: 40.0,
+                height: CHUNK_S1F / 2.,
+                x_z_offset: CHUNK_S1F * 2.,
+            },
             CameraSmoothing::default(),
-            Transform::from_translation(Vec3::new(2.0, BUILDER_Y, 0.0))
-                .looking_at(Vec3::new(0.0, BUILDER_Y, 0.0), Vec3::Y),
+            Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(half_size, 0.0, 0.0))
+                .looking_at(
+                    BUILDER_CHUNK_POS_V3 + Vec3::new(half_size, 0.0, 0.0),
+                    Vec3::Y,
+                ),
             Projection::Perspective(PerspectiveProjection {
                 fov: INITIAL_FOV,
                 ..Default::default()
@@ -96,24 +113,31 @@ pub fn create_area(
         unlit: true,
         ..default()
     });
+    let white_material = materials.add(StandardMaterial {
+        base_color: Srgba::new(1., 1., 1., 0.5).into(),
+        unlit: true,
+        ..default()
+    });
 
-    let horizontal_panel = Mesh3d(meshes.add(Cuboid::new(100.0, 1.0, 100.0)));
+    let wall_length = 250.0;
+    let wall_length_half_size = wall_length * 0.5;
+    let wall_width = 1.0;
+    let horizontal_panel = Mesh3d(meshes.add(Cuboid::new(wall_length, wall_width, wall_length)));
 
-    let vertical_panel_xz = Mesh3d(meshes.add(Cuboid::new(100.0, 100.0, 1.0)));
-    let vertical_panel_yz = Mesh3d(meshes.add(Cuboid::new(1.0, 100.0, 100.0)));
-
-    let inner_size = 62.0;
-    let half_size = inner_size / 2.0;
+    let vertical_panel_xz = Mesh3d(meshes.add(Cuboid::new(wall_length, wall_length, wall_width)));
+    let vertical_panel_yz = Mesh3d(meshes.add(Cuboid::new(wall_width, wall_length, wall_length)));
 
     // Top face
     commands.spawn((
         horizontal_panel.clone(),
         MeshMaterial3d(black_material.clone()),
-        Transform::from_xyz(0.0, BUILDER_Y + half_size, 0.0),
+        Transform::from_translation(
+            BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, wall_length_half_size, 0.),
+        ),
         WorldMesh,
         Pickable {
             should_block_lower: true,
-            is_hoverable: true,
+            is_hoverable: false,
         },
     ));
 
@@ -121,11 +145,13 @@ pub fn create_area(
     commands.spawn((
         horizontal_panel,
         MeshMaterial3d(black_material.clone()),
-        Transform::from_xyz(0.0, BUILDER_Y - half_size, 0.0),
+        Transform::from_translation(
+            BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, -wall_length_half_size, 0.),
+        ),
         WorldMesh,
         Pickable {
             should_block_lower: true,
-            is_hoverable: true,
+            is_hoverable: false,
         },
     ));
 
@@ -133,11 +159,13 @@ pub fn create_area(
     commands.spawn((
         vertical_panel_xz.clone(),
         MeshMaterial3d(black_material.clone()),
-        Transform::from_xyz(0.0, BUILDER_Y, half_size),
+        Transform::from_translation(
+            BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, 0.0, wall_length_half_size),
+        ),
         WorldMesh,
         Pickable {
             should_block_lower: true,
-            is_hoverable: true,
+            is_hoverable: false,
         },
     ));
 
@@ -145,10 +173,12 @@ pub fn create_area(
     commands.spawn((
         vertical_panel_xz,
         MeshMaterial3d(black_material.clone()),
-        Transform::from_xyz(0.0, BUILDER_Y, -half_size),
+        Transform::from_translation(
+            BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, 0., -wall_length_half_size),
+        ),
         Pickable {
             should_block_lower: true,
-            is_hoverable: true,
+            is_hoverable: false,
         },
     ));
 
@@ -156,11 +186,13 @@ pub fn create_area(
     commands.spawn((
         vertical_panel_yz.clone(),
         MeshMaterial3d(black_material.clone()),
-        Transform::from_xyz(-half_size, BUILDER_Y, 0.0),
+        Transform::from_translation(
+            BUILDER_CHUNK_POS_V3 + Vec3::new(-wall_length_half_size, 0., 0.),
+        ),
         WorldMesh,
         Pickable {
             should_block_lower: true,
-            is_hoverable: true,
+            is_hoverable: false,
         },
     ));
 
@@ -168,27 +200,70 @@ pub fn create_area(
     commands.spawn((
         vertical_panel_yz,
         MeshMaterial3d(black_material),
-        Transform::from_xyz(half_size, BUILDER_Y, 0.0),
+        Transform::from_translation(
+            BUILDER_CHUNK_POS_V3 + Vec3::new(wall_length_half_size, 0.0, 0.),
+        ),
         WorldMesh,
         Pickable {
             should_block_lower: true,
-            is_hoverable: true,
+            is_hoverable: false,
         },
     ));
 
-    let red_cube = Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0)));
+    let backface_plane_z: Mesh3d =
+        Mesh3d(meshes.add(Plane3d::new(Vec3::Z, Vec2::new(half_size, half_size))));
+    let forwardface_plane_z: Mesh3d =
+        Mesh3d(meshes.add(Plane3d::new(Vec3::NEG_Z, Vec2::new(half_size, half_size))));
+    let leftface_plane_x: Mesh3d =
+        Mesh3d(meshes.add(Plane3d::new(Vec3::NEG_X, Vec2::new(half_size, half_size))));
+    let rightface_plane_x: Mesh3d =
+        Mesh3d(meshes.add(Plane3d::new(Vec3::X, Vec2::new(half_size, half_size))));
+    let upface_plane_y: Mesh3d =
+        Mesh3d(meshes.add(Plane3d::new(Vec3::Y, Vec2::new(half_size, half_size))));
+    let downface_plane_y: Mesh3d =
+        Mesh3d(meshes.add(Plane3d::new(Vec3::NEG_Y, Vec2::new(half_size, half_size))));
+    let half_chunk = CHUNK_S1F * 0.5;
     commands.spawn((
-        red_cube.clone(),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.0, 0.0, 1.0),
-            ..default()
-        })),
+        backface_plane_z.clone(),
+        MeshMaterial3d(white_material.clone()),
+        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, 0.0, -half_chunk)),
         WorldMesh,
-        Transform::from_xyz(0., BUILDER_Y, 0.),
-        Pickable {
-            should_block_lower: true,
-            is_hoverable: true,
-        },
+        Pickable::default(),
+    ));
+    commands.spawn((
+        forwardface_plane_z.clone(),
+        MeshMaterial3d(white_material.clone()),
+        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, 0.0, half_chunk)),
+        WorldMesh,
+        Pickable::default(),
+    ));
+    commands.spawn((
+        leftface_plane_x.clone(),
+        MeshMaterial3d(white_material.clone()),
+        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(half_chunk, 0.0, 0.)),
+        WorldMesh,
+        Pickable::default(),
+    ));
+    commands.spawn((
+        rightface_plane_x.clone(),
+        MeshMaterial3d(white_material.clone()),
+        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(-half_chunk, 0.0, 0.)),
+        WorldMesh,
+        Pickable::default(),
+    ));
+    commands.spawn((
+        upface_plane_y.clone(),
+        MeshMaterial3d(white_material.clone()),
+        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, -half_chunk, 0.)),
+        WorldMesh,
+        Pickable::default(),
+    ));
+    commands.spawn((
+        downface_plane_y.clone(),
+        MeshMaterial3d(white_material.clone()),
+        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0., half_chunk, 0.)),
+        WorldMesh,
+        Pickable::default(),
     ));
 }
 
@@ -296,7 +371,6 @@ pub fn render_to_image_example_system(
 
                     if i.pointer.primary_released() {
                         if let Some(pos) = building_state.current_position {
-                            println!("Placing block at {pos:?}");
                             let p: Pos3d<1> = Pos3d {
                                 x: (pos.x * 8.) as i32,
                                 y: (pos.y * 8.) as i32,
@@ -317,12 +391,12 @@ pub fn render_to_image_example_system(
 }
 
 pub fn adjust_camera_angle(
-    camera_settings: Res<CameraSettings>,
     mut query: Query<
         (
             &mut Transform,
             &mut CameraOrbit,
             &mut CameraSmoothing,
+            &CameraSettings,
             &BuildCamera,
         ),
         With<Camera3d>,
@@ -330,68 +404,70 @@ pub fn adjust_camera_angle(
     time: Res<Time>,
     windows: Query<&Window>,
 ) {
-    let (mut camera_transform, mut camera_orbit, mut camera_smoothing, _) =
-        query.single_mut().unwrap();
-    let player_pos = Vec3::new(0., BUILDER_Y, 0.);
+    if let Ok((mut camera_transform, mut camera_orbit, mut camera_smoothing, camera_settings, _)) =
+        query.single_mut()
+    {
+        let camera_target_pos = BUILDER_CHUNK_POS_V3;
 
-    // Update target Y position - this is what we'll smoothly move toward
-    camera_smoothing.target_y = player_pos.y + camera_settings.height;
+        // Update target Y position - this is what we'll smoothly move toward
+        camera_smoothing.target_y = camera_target_pos.y + camera_settings.height;
 
-    // Smooth Y movement using lerp
-    camera_smoothing.current_y = lerp(
-        camera_smoothing.current_y,
-        camera_smoothing.target_y,
-        camera_smoothing.smoothing_factor * time.delta_secs() * Y_CAM_SPEED,
-    );
+        // Smooth Y movement using lerp
+        camera_smoothing.current_y = lerp(
+            camera_smoothing.current_y,
+            camera_smoothing.target_y,
+            camera_smoothing.smoothing_factor * time.delta_secs() * Y_CAM_SPEED,
+        );
 
-    let base_camera_pos = Vec3::new(
-        player_pos.x
-            + camera_settings.x_z_offset * camera_orbit.angle.cos() * camera_orbit.pitch.cos(),
-        player_pos.y - camera_settings.x_z_offset * camera_orbit.pitch.sin(), // Inverted Y position
-        player_pos.z
-            + camera_settings.x_z_offset * camera_orbit.angle.sin() * camera_orbit.pitch.cos(),
-    );
-    // Calculate player movement since last frame
-    let player_movement = player_pos - camera_smoothing.last_player_pos;
-    camera_smoothing.last_player_pos = player_pos;
+        let base_camera_pos = Vec3::new(
+            camera_target_pos.x
+                + camera_settings.x_z_offset * camera_orbit.angle.cos() * camera_orbit.pitch.cos(),
+            camera_target_pos.y - camera_settings.x_z_offset * camera_orbit.pitch.sin(), // Inverted Y position
+            camera_target_pos.z
+                + camera_settings.x_z_offset * camera_orbit.angle.sin() * camera_orbit.pitch.cos(),
+        );
+        // Calculate player movement since last frame
+        let player_movement = camera_target_pos - camera_smoothing.last_player_pos;
+        camera_smoothing.last_player_pos = camera_target_pos;
 
-    // Project player position onto camera's view plane
-    let window = windows.single().unwrap();
-    let window_size = Vec2::new(window.width(), window.height());
+        // Project player position onto camera's view plane
+        let window = windows.single().unwrap();
+        let window_size = Vec2::new(window.width(), window.height());
 
-    // Calculate view direction and right vector
-    let view_dir = (player_pos - camera_transform.translation).normalize();
-    let right = view_dir.cross(Vec3::Y).normalize();
-    let up = right.cross(view_dir).normalize();
+        // Calculate view direction and right vector
+        let view_dir = (camera_target_pos - camera_transform.translation).normalize();
+        let right = view_dir.cross(Vec3::Y).normalize();
+        let up = right.cross(view_dir).normalize();
 
-    // Calculate the target box size in world units at player distance
-    let distance_to_player = (player_pos - camera_transform.translation).length();
-    let target_box_half_width =
-        window_size.x * camera_smoothing.target_box_width * 0.5 * distance_to_player / 1000.0;
-    let target_box_half_height =
-        window_size.y * camera_smoothing.target_box_height * 0.5 * distance_to_player / 1000.0;
+        // Calculate the target box size in world units at player distance
+        let distance_to_player = (camera_target_pos - camera_transform.translation).length();
+        let target_box_half_width =
+            window_size.x * camera_smoothing.target_box_width * 0.5 * distance_to_player / 1000.0;
+        let target_box_half_height =
+            window_size.y * camera_smoothing.target_box_height * 0.5 * distance_to_player / 1000.0;
 
-    // Project player movement onto camera plane
-    let right_movement = player_movement.dot(right);
-    let up_movement = player_movement.dot(up);
+        // Project player movement onto camera plane
+        let right_movement = player_movement.dot(right);
+        let up_movement = player_movement.dot(up);
 
-    // Calculate camera adjustment to keep player in target box
-    let mut camera_adjustment = Vec3::ZERO;
+        // Calculate camera adjustment to keep player in target box
+        let mut camera_adjustment = Vec3::ZERO;
 
-    // Only adjust camera if player moves outside target box
-    if right_movement.abs() > target_box_half_width {
-        let excess = right_movement.abs() - target_box_half_width;
-        camera_adjustment += right * excess.signum() * right_movement.signum() * excess;
+        // Only adjust camera if player moves outside target box
+        if right_movement.abs() > target_box_half_width {
+            let excess = right_movement.abs() - target_box_half_width;
+            camera_adjustment += right * excess.signum() * right_movement.signum() * excess;
+        }
+
+        if up_movement.abs() > target_box_half_height {
+            let excess = up_movement.abs() - target_box_half_height;
+            camera_adjustment += up * excess.signum() * up_movement.signum() * excess;
+        }
+
+        // Apply camera position with adjustment
+        camera_transform.translation = base_camera_pos + camera_adjustment;
+
+        // Look at player position
+        camera_transform.look_at(camera_target_pos, Vec3::Y);
     }
-
-    if up_movement.abs() > target_box_half_height {
-        let excess = up_movement.abs() - target_box_half_height;
-        camera_adjustment += up * excess.signum() * up_movement.signum() * excess;
-    }
-
-    // Apply camera position with adjustment
-    camera_transform.translation = base_camera_pos + camera_adjustment;
-
-    // Look at player position
-    camera_transform.look_at(player_pos, Vec3::Y);
 }

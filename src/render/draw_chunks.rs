@@ -3,6 +3,7 @@ use super::shared_load_area::{setup_shared_load_area, update_shared_load_area, S
 use super::texture_array::{ArrayTextureMaterial, BlockTextureArray};
 use super::texture_array::{TextureArrayPlugin, TextureMap};
 use crate::block::Face;
+use crate::scenes::builder::systems::BUILDER_CHUNK_POS;
 use crate::world::pos2d::chunks_in_col;
 use crate::world::{range_around, ColUnloadEvent, LoadAreaAssigned, PlayerArea};
 use crate::world::{ChunkPos, VoxelWorld, CHUNK_S1, Y_CHUNKS};
@@ -15,7 +16,6 @@ use bevy::render::primitives::Aabb;
 use bevy::render::view::NoFrustumCulling;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy_picking::mesh_picking::ray_cast::SimplifiedMesh;
-use bevy_picking::pointer::PointerInteraction;
 use binary_greedy_meshing::MeshData;
 use itertools::{iproduct, Itertools};
 use std::collections::{BTreeSet, HashMap};
@@ -184,6 +184,10 @@ pub fn queue_mesh_generation(
         }
     }
 }
+
+fn still_in_load_area(chunk_pos: ChunkPos, load_area: &PlayerArea) -> bool {
+    load_area.col_dists.contains_key(&chunk_pos.into()) || chunk_pos == BUILDER_CHUNK_POS
+}
 #[allow(clippy::collapsible_else_if)]
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_arguments)]
@@ -207,7 +211,8 @@ pub fn process_mesh_queue(
     // Process current mesh if there is one
     if let Some((chunk_pos, dist)) = mesh_queue.in_progress {
         // Skip if the chunk is no longer in the load area
-        if !load_area.col_dists.contains_key(&chunk_pos.into()) {
+        if !still_in_load_area(chunk_pos, &load_area) {
+            println!("chunk no longer in load area {:?}", chunk_pos);
             mesh_queue.in_progress = None;
             return;
         }

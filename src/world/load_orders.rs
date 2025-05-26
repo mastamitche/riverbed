@@ -1,3 +1,5 @@
+use crate::scenes::builder::systems::BUILDER_CHUNK_POS;
+
 use super::BlockPos;
 use super::{
     pos2d::Pos2d, utils::ReinsertTrait, ColPos, PlayerArea, RenderDistance, VoxelWorld, CHUNK_S1,
@@ -74,6 +76,9 @@ impl LoadOrders {
             // the column was still waiting for load
             self.to_generate.write_arc().remove(i);
         } else {
+            if col_pos.x == BUILDER_CHUNK_POS.x && col_pos.z == BUILDER_CHUNK_POS.z {
+                return;
+            }
             self.to_unload.push(col_pos);
         }
     }

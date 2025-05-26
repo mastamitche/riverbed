@@ -9,9 +9,9 @@ use bevy::{math::Vec3, prelude::*};
 const WALK_SPEED: f32 = 200.;
 
 const SPAWN: Vec3 = Vec3 {
-    x: 500.,
+    x: 0.,
     y: 8.,
-    z: 500.,
+    z: 0.,
 };
 
 pub struct PlayerPlugin;

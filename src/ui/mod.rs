@@ -24,12 +24,7 @@ impl Plugin for UIPlugin {
         //.add_plugins(WorldInspectorPlugin::new())
         //
         ;
-        app.insert_resource(CameraSettings {
-            fov: 40.0,
-            height: 30.0,
-            x_z_offset: 10.0,
-        })
-        .add_systems(
+        app.add_systems(
             Update,
             (
                 // ui_player_system,
@@ -75,7 +70,7 @@ pub struct CameraOrbit {
     pub dragging: bool,        // Whether we're currently dragging
     pub last_cursor_pos: Vec2, // Last cursor position for delta calculation
 }
-#[derive(Resource)]
+#[derive(Component)]
 pub struct CameraSettings {
     pub fov: f32,
     pub height: f32,
@@ -127,12 +122,12 @@ fn handle_camera_rotation(
 }
 
 pub fn adjust_camera_angle(
-    camera_settings: Res<CameraSettings>,
     mut query: Query<
         (
             &mut Transform,
             &mut CameraOrbit,
             &mut CameraSmoothing,
+            &CameraSettings,
             &MainCamera,
         ),
         With<Camera3d>,
@@ -141,7 +136,7 @@ pub fn adjust_camera_angle(
     time: Res<Time>,
     windows: Query<&Window>,
 ) {
-    let (mut camera_transform, mut camera_orbit, mut camera_smoothing, _) =
+    let (mut camera_transform, mut camera_orbit, mut camera_smoothing, camera_settings, _) =
         query.single_mut().unwrap();
     if let Ok((_, player_transform)) = player_query.single() {
         let player_pos = player_transform.translation;
@@ -211,48 +206,46 @@ pub fn adjust_camera_angle(
 
 fn ui_camera_system(
     mut contexts: EguiContexts,
-    mut camera_settings: ResMut<CameraSettings>,
-    player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
-    query: Query<&Transform, With<Camera3d>>,
+    mut query: Query<(&Transform, &mut CameraSettings), With<Camera3d>>,
 ) {
-    egui::Window::new("Camera Settings").show(contexts.ctx_mut(), |ui| {
-        ui.add(egui::Slider::new(&mut camera_settings.fov, 5.0..=120.0).text("fov"));
-        ui.add(egui::Slider::new(&mut camera_settings.height, 1.0..=500.0).text("Height"));
-        ui.add(
-            egui::Slider::new(&mut camera_settings.x_z_offset, 1.0..=500.0)
-                .text("Distance off center"),
-        );
-    });
+    if let Ok((_camera_transform, mut camera_settings)) = query.single_mut() {
+        egui::Window::new("Camera Settings").show(contexts.ctx_mut(), |ui| {
+            ui.add(egui::Slider::new(&mut camera_settings.fov, 5.0..=120.0).text("fov"));
+            ui.add(egui::Slider::new(&mut camera_settings.height, 1.0..=500.0).text("Height"));
+            ui.add(
+                egui::Slider::new(&mut camera_settings.x_z_offset, 1.0..=500.0)
+                    .text("Distance off center"),
+            );
+        });
+    }
 }
 fn ui_player_system(
     mut contexts: EguiContexts,
-    mut camera_settings: ResMut<CameraSettings>,
     player_query: Query<(Entity, &Transform), (With<PlayerControlled>, Without<Camera3d>)>,
-    query: Query<&Transform, With<Camera3d>>,
+    mut query: Query<(&Transform, &mut CameraSettings), With<Camera3d>>,
 ) {
-    let player_pos = format!(
-        "Player pos: x: {}, y: {}, z: {}",
-        player_query.single().unwrap().1.translation.x.floor(),
-        player_query.single().unwrap().1.translation.y.floor(),
-        player_query.single().unwrap().1.translation.z.floor()
-    );
-    let camera_pos = format!(
-        "Camera pos: x: {}, y: {}, z: {}",
-        query.single().unwrap().translation.x.floor(),
-        query.single().unwrap().translation.y.floor(),
-        query.single().unwrap().translation.z.floor()
-    );
-    egui::Window::new("Player ").show(contexts.ctx_mut(), |ui| {
-        ui.label(player_pos);
-        ui.label(camera_pos);
-    });
+    if let Ok((camera_transform, _)) = query.single_mut() {
+        let player_pos = format!(
+            "Player pos: x: {}, y: {}, z: {}",
+            player_query.single().unwrap().1.translation.x.floor(),
+            player_query.single().unwrap().1.translation.y.floor(),
+            player_query.single().unwrap().1.translation.z.floor()
+        );
+        let camera_pos = format!(
+            "Camera pos: x: {}, y: {}, z: {}",
+            camera_transform.translation.x.floor(),
+            camera_transform.translation.y.floor(),
+            camera_transform.translation.z.floor()
+        );
+        egui::Window::new("Player ").show(contexts.ctx_mut(), |ui| {
+            ui.label(player_pos);
+            ui.label(camera_pos);
+        });
+    }
 }
 
-fn update_camera_projection(
-    camera_settings: Res<CameraSettings>,
-    mut query: Query<&mut Projection, With<Camera3d>>,
-) {
-    for mut projection in query.iter_mut() {
+fn update_camera_projection(mut query: Query<(&mut Projection, &CameraSettings), With<Camera3d>>) {
+    for (mut projection, camera_settings) in query.iter_mut() {
         *projection = Projection::Perspective(PerspectiveProjection {
             fov: camera_settings.fov.to_radians(),
             ..Default::default()
@@ -260,20 +253,22 @@ fn update_camera_projection(
     }
 }
 fn handle_camera_zoom(
-    mut camera_settings: ResMut<CameraSettings>,
     mut mouse_wheel_events: EventReader<MouseWheel>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut query: Query<(&Transform, &mut CameraSettings), (With<Camera3d>, With<MainCamera>)>,
 ) {
-    // Skip zoom if right mouse button is pressed (to avoid conflict with rotation)
-    if mouse_button_input.pressed(MouseButton::Right) {
-        return;
-    }
+    if let Ok((_, mut camera_settings)) = query.single_mut() {
+        // Skip zoom if right mouse button is pressed (to avoid conflict with rotation)
+        if mouse_button_input.pressed(MouseButton::Right) {
+            return;
+        }
 
-    // Process all scroll events
-    for event in mouse_wheel_events.read() {
-        let zoom_speed = 6.;
-        let zoom_delta = event.y * zoom_speed;
+        // Process all scroll events
+        for event in mouse_wheel_events.read() {
+            let zoom_speed = 6.;
+            let zoom_delta = event.y * zoom_speed;
 
-        camera_settings.height = (camera_settings.height - zoom_delta).clamp(5.0, 40.0);
+            camera_settings.height = (camera_settings.height - zoom_delta).clamp(5.0, 40.0);
+        }
     }
 }

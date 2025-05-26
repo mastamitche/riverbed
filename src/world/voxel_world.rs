@@ -75,9 +75,8 @@ impl VoxelWorld {
         VoxelWorld { chunks }
     }
 
-    pub fn set_block(&self, pos: BlockPos, block: Block) {
+    pub fn set_block(&self, pos: BlockPos, block: Block, from_place: bool) {
         let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(pos);
-
         // Try to get the chunk if it exists
         if let Some(mut chunk) = self.chunks.get_mut(&chunk_pos) {
             chunk.set(chunked_pos, block);
@@ -87,8 +86,9 @@ impl VoxelWorld {
             new_chunk.set(chunked_pos, block);
             self.chunks.insert(chunk_pos, new_chunk);
         }
-
-        self.mark_change(chunk_pos, chunked_pos, block);
+        if from_place {
+            self.mark_change(chunk_pos, chunked_pos, block);
+        }
     }
 
     pub fn set_block_safe(&self, pos: BlockPos, block: Block) -> bool {
@@ -140,7 +140,7 @@ impl VoxelWorld {
                 z: base_z,
             };
 
-            self.set_block(pos, block);
+            self.set_block(pos, block, false);
         }
     }
 

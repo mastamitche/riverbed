@@ -1,6 +1,6 @@
 use crate::{
     agents::PlayerSpawn,
-    ui::{CameraOrbit, CameraSmoothing},
+    ui::{CameraOrbit, CameraSettings, CameraSmoothing},
     utils::INITIAL_FOV,
 };
 use bevy::{
@@ -41,6 +41,11 @@ pub fn cam_setup(mut commands: Commands) {
                 fov: INITIAL_FOV,
                 ..Default::default()
             }),
+            CameraSettings {
+                fov: 40.0,
+                height: 30.0,
+                x_z_offset: 10.0,
+            },  
             CameraOrbit {
                 angle: std::f32::consts::PI / 4.0,
                 dragging: false,

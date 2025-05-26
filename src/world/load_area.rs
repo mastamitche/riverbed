@@ -1,4 +1,7 @@
-use crate::world::{ChunkPos, ColPos, TrackedChunk};
+use crate::{
+    scenes::builder::systems::BUILDER_CHUNK_POS,
+    world::{ChunkPos, ColPos, TrackedChunk},
+};
 use bevy::prelude::*;
 use dashmap::DashMap;
 use itertools::iproduct;
@@ -44,13 +47,23 @@ impl PlayerArea {
         chunks
             .iter()
             .filter_map(|entry| {
-                if entry.value().changed && entry.value().loaded && !entry.value().meshing {
+                let is_loaded = entry.value().loaded;
+                let is_changed = entry.value().changed;
+                let is_meshing = entry.value().meshing;
+                if is_changed && is_loaded && !is_meshing {
                     Some(*entry.key())
                 } else {
                     None
                 }
             })
-            .min_by_key(|chunk_pos| <ColPos>::from(*chunk_pos).dist(self.center))
+            .min_by_key(|chunk_pos| {
+                if chunk_pos == &BUILDER_CHUNK_POS {
+                    println!("builder chunk cloest change");
+                    0
+                } else {
+                    <ColPos>::from(*chunk_pos).dist(self.center)
+                }
+            })
     }
 
     pub fn pop_closest_change(

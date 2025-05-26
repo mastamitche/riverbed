@@ -1,10 +1,8 @@
-use std::default;
-
 use crate::{
     controls::action_mapping::{ActionState, GameAction},
     render::draw_chunks::BuildingState,
     setup::Block,
-    world::{pos3d::Pos3d, VoxelWorld, CHUNK_S1},
+    world::{pos3d::Pos3d, VoxelWorld},
 };
 use bevy::prelude::*;
 
@@ -48,7 +46,8 @@ fn place_block(
 ) {
     let was_empty = place_events.is_empty();
     for evt in place_events.read() {
-        world.set_block(evt.pos, evt.block);
+        println!("Setting block at {:?} to {:?}", evt.pos, evt.destination);
+        world.set_block(evt.pos, evt.block, true);
     }
     if was_empty == false {
         building_state.current_position = None;

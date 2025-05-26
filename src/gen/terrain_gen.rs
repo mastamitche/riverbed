@@ -1,13 +1,8 @@
 use crate::gen::earth_gen::Earth;
-use crate::setup::Block;
 use crate::world::pos2d::Pos2d;
-use crate::world::BlockPos;
-use crate::world::ChunkPos;
 use crate::world::ColPos;
 use crate::world::LoadOrders;
 use crate::world::VoxelWorld;
-use crate::world::CHUNK_S1;
-use crate::world::CHUNK_S1I;
 use bevy::prelude::*;
 use std::collections::HashMap;
 

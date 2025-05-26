@@ -24,6 +24,7 @@ pub use load_orders::{BlockEntities, ColUnloadEvent, LoadOrders};
 pub use pos::*;
 pub use voxel_world::*;
 pub const CHUNK_S1: usize = 62;
+pub const CHUNK_S1F: f32 = 62.;
 pub const CHUNK_S2: usize = CHUNK_S1.pow(2);
 pub const CHUNKP_S1: usize = CHUNK_S1 + 2;
 pub const CHUNKP_S2: usize = CHUNKP_S1.pow(2);

@@ -68,7 +68,7 @@ impl Earth {
                                     y,
                                     z: abs_z,
                                 };
-                                world.set_block(pos, Block::AcaciaLeaves);
+                                world.set_block(pos, Block::AcaciaLeaves, false);
                             }
 
                             // Add grass at the top
@@ -77,7 +77,7 @@ impl Earth {
                                 y: top_height,
                                 z: abs_z,
                             };
-                            world.set_block(grass_pos, Block::AcaciaLeaves);
+                            world.set_block(grass_pos, Block::AcaciaLeaves, false);
 
                             // Move to the next position
                             state.current_z += 1;
