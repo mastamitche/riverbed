@@ -88,7 +88,7 @@ pub fn create_area(
             },
             CameraSettings {
                 fov: 40.0,
-                height: CHUNK_S1F / 2.,
+                height: CHUNK_S1F * 2.,
                 x_z_offset: CHUNK_S1F * 2.,
             },
             CameraSmoothing::default(),
@@ -270,7 +270,13 @@ pub fn create_area(
 pub fn render_to_image_example_system(
     mesh_pickable_query: Query<(), With<WorldMesh>>,
     cube_preview_image: Res<EditorRenderTexture>,
-    mut query: Query<(&GlobalTransform, &mut CameraOrbit, &BuildCamera, &Camera)>,
+    mut query: Query<(
+        &GlobalTransform,
+        &mut CameraOrbit,
+        &mut CameraSettings,
+        &BuildCamera,
+        &Camera,
+    )>,
     mut contexts: EguiContexts,
     mut building_state: ResMut<BuildingState>,
     mut ray_cast: MeshRayCast,
@@ -293,7 +299,7 @@ pub fn render_to_image_example_system(
             ));
             if ui.ui_contains_pointer() {
                 ui.input(|i| {
-                    let (camera_global_transform, mut camera_orbit, _, camera) =
+                    let (camera_global_transform, mut camera_orbit,mut camera_settings, _, camera) =
                         query.single_mut().unwrap();
                     if i.pointer.button_down(egui::PointerButton::Secondary) {
                         camera_orbit.dragging = true;
@@ -321,6 +327,7 @@ pub fn render_to_image_example_system(
                     } else {
                         camera_orbit.dragging = false;
                     }
+
                     if let Some(pos) = i.pointer.hover_pos() {
                         // Calculate position relative to the image
                         let image_rect = response.rect;
@@ -383,6 +390,13 @@ pub fn render_to_image_example_system(
                             });
                         }
                     }
+                    let delta = i.raw_scroll_delta;
+                    if delta.y != 0.0  &&  i.pointer.button_down(egui::PointerButton::Secondary) == false{
+                        let zoom_speed = 0.04;
+                        let zoom_delta = delta.y * zoom_speed;
+
+                        camera_settings.height = (camera_settings.height - zoom_delta).clamp(5.0,  CHUNK_S1F *2.);
+                    }
                 });
             }
         });
@@ -402,7 +416,6 @@ pub fn adjust_camera_angle(
         With<Camera3d>,
     >,
     time: Res<Time>,
-    windows: Query<&Window>,
 ) {
     if let Ok((mut camera_transform, mut camera_orbit, mut camera_smoothing, camera_settings, _)) =
         query.single_mut()
@@ -410,64 +423,33 @@ pub fn adjust_camera_angle(
         let camera_target_pos = BUILDER_CHUNK_POS_V3;
 
         // Update target Y position - this is what we'll smoothly move toward
-        camera_smoothing.target_y = camera_target_pos.y + camera_settings.height;
+        // This is now being used for zoom distance
+        camera_smoothing.target_y = camera_settings.height;
 
-        // Smooth Y movement using lerp
+        // Smooth Y movement using lerp - this now controls zoom smoothing
         camera_smoothing.current_y = lerp(
             camera_smoothing.current_y,
             camera_smoothing.target_y,
             camera_smoothing.smoothing_factor * time.delta_secs() * Y_CAM_SPEED,
         );
 
-        let base_camera_pos = Vec3::new(
-            camera_target_pos.x
-                + camera_settings.x_z_offset * camera_orbit.angle.cos() * camera_orbit.pitch.cos(),
-            camera_target_pos.y - camera_settings.x_z_offset * camera_orbit.pitch.sin(), // Inverted Y position
-            camera_target_pos.z
-                + camera_settings.x_z_offset * camera_orbit.angle.sin() * camera_orbit.pitch.cos(),
-        );
-        // Calculate player movement since last frame
-        let player_movement = camera_target_pos - camera_smoothing.last_player_pos;
-        camera_smoothing.last_player_pos = camera_target_pos;
+        // Calculate the direction vector for a proper orbital camera
+        // Pitch controls the height above the horizontal plane
+        // Angle controls the rotation around the vertical axis
+        let x = camera_orbit.angle.cos() * camera_orbit.pitch.cos();
+        let y = -camera_orbit.pitch.sin(); // Proper orbit
+        let z = camera_orbit.angle.sin() * camera_orbit.pitch.cos();
 
-        // Project player position onto camera's view plane
-        let window = windows.single().unwrap();
-        let window_size = Vec2::new(window.width(), window.height());
+        let direction = Vec3::new(x, y, z).normalize();
 
-        // Calculate view direction and right vector
-        let view_dir = (camera_target_pos - camera_transform.translation).normalize();
-        let right = view_dir.cross(Vec3::Y).normalize();
-        let up = right.cross(view_dir).normalize();
+        // Apply zoom distance to the direction - using smoothed value for zoom
+        let zoom_distance = camera_smoothing.current_y;
+        let camera_pos = camera_target_pos + direction * zoom_distance;
 
-        // Calculate the target box size in world units at player distance
-        let distance_to_player = (camera_target_pos - camera_transform.translation).length();
-        let target_box_half_width =
-            window_size.x * camera_smoothing.target_box_width * 0.5 * distance_to_player / 1000.0;
-        let target_box_half_height =
-            window_size.y * camera_smoothing.target_box_height * 0.5 * distance_to_player / 1000.0;
+        // Apply camera position
+        camera_transform.translation = camera_pos;
 
-        // Project player movement onto camera plane
-        let right_movement = player_movement.dot(right);
-        let up_movement = player_movement.dot(up);
-
-        // Calculate camera adjustment to keep player in target box
-        let mut camera_adjustment = Vec3::ZERO;
-
-        // Only adjust camera if player moves outside target box
-        if right_movement.abs() > target_box_half_width {
-            let excess = right_movement.abs() - target_box_half_width;
-            camera_adjustment += right * excess.signum() * right_movement.signum() * excess;
-        }
-
-        if up_movement.abs() > target_box_half_height {
-            let excess = up_movement.abs() - target_box_half_height;
-            camera_adjustment += up * excess.signum() * up_movement.signum() * excess;
-        }
-
-        // Apply camera position with adjustment
-        camera_transform.translation = base_camera_pos + camera_adjustment;
-
-        // Look at player position
+        // Look at target position
         camera_transform.look_at(camera_target_pos, Vec3::Y);
     }
 }

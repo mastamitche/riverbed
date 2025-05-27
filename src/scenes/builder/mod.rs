@@ -15,7 +15,7 @@ impl Plugin for BuilderPlugin {
                 EguiContextPass,
                 (render_to_image_example_system),
             )
-            .add_systems(PostUpdate, adjust_camera_angle)
+            .add_systems(Update, adjust_camera_angle)
         //b
         ;
     }
