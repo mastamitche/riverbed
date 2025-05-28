@@ -37,6 +37,17 @@ pub const BUILDER_CHUNK_POS_V3: Vec3 = Vec3::new(0., BUILDER_Y, 0.);
 pub struct EditorRenderTexture(Handle<Image>);
 #[derive(Component)]
 pub struct BuildCamera;
+#[derive(Resource)]
+pub struct BuilderSettings {
+    pub chunk_size: u32,
+}
+impl Default for BuilderSettings {
+    fn default() -> Self {
+        Self {
+            chunk_size: CHUNK_S1 as u32,
+        }
+    }
+}
 
 pub fn create_area(
     mut commands: Commands,
@@ -114,7 +125,7 @@ pub fn create_area(
         ..default()
     });
     let white_material = materials.add(StandardMaterial {
-        base_color: Srgba::new(1., 1., 1., 0.5).into(),
+        base_color: Srgba::new(1., 1., 1., 0.1).into(),
         unlit: true,
         ..default()
     });
@@ -277,6 +288,7 @@ pub fn render_to_image_example_system(
         &BuildCamera,
         &Camera,
     )>,
+    mut builder_settings: ResMut<BuilderSettings>,
     mut contexts: EguiContexts,
     mut building_state: ResMut<BuildingState>,
     mut ray_cast: MeshRayCast,
@@ -297,6 +309,7 @@ pub fn render_to_image_example_system(
                 cube_preview_texture_id,
                 image_size,
             ));
+            ui.add(egui::Slider::new(&mut builder_settings.chunk_size, 1..=CHUNK_S1 as u32).text("Size"));
             if ui.ui_contains_pointer() {
                 ui.input(|i| {
                     let (camera_global_transform, mut camera_orbit,mut camera_settings, _, camera) =
@@ -350,7 +363,6 @@ pub fn render_to_image_example_system(
 
                             // Cast the ray with the settings
                             if let Some(hit) = ray_cast.cast_ray(ray, &settings).first() {
-                                //println!("Hit: {:?}", hit);
 
                                 let voxel_size = 0.125;
                                 let half_voxel_size = voxel_size / 2.0;
@@ -415,41 +427,35 @@ pub fn adjust_camera_angle(
         ),
         With<Camera3d>,
     >,
+    builder_settings: Res<BuilderSettings>,
     time: Res<Time>,
 ) {
-    if let Ok((mut camera_transform, mut camera_orbit, mut camera_smoothing, camera_settings, _)) =
+    if let Ok((mut camera_transform, camera_orbit, mut camera_smoothing, camera_settings, _)) =
         query.single_mut()
     {
-        let camera_target_pos = BUILDER_CHUNK_POS_V3;
+        let chunk_middle_1 = builder_settings.chunk_size as f32 / 2.0;
+        let chunk_middle_vec3 = Vec3::new(chunk_middle_1, chunk_middle_1, chunk_middle_1);
+        let camera_target_pos = BUILDER_CHUNK_POS_V3 + chunk_middle_vec3;
 
-        // Update target Y position - this is what we'll smoothly move toward
-        // This is now being used for zoom distance
         camera_smoothing.target_y = camera_settings.height;
 
-        // Smooth Y movement using lerp - this now controls zoom smoothing
         camera_smoothing.current_y = lerp(
             camera_smoothing.current_y,
             camera_smoothing.target_y,
             camera_smoothing.smoothing_factor * time.delta_secs() * Y_CAM_SPEED,
         );
 
-        // Calculate the direction vector for a proper orbital camera
-        // Pitch controls the height above the horizontal plane
-        // Angle controls the rotation around the vertical axis
         let x = camera_orbit.angle.cos() * camera_orbit.pitch.cos();
         let y = -camera_orbit.pitch.sin(); // Proper orbit
         let z = camera_orbit.angle.sin() * camera_orbit.pitch.cos();
 
         let direction = Vec3::new(x, y, z).normalize();
 
-        // Apply zoom distance to the direction - using smoothed value for zoom
         let zoom_distance = camera_smoothing.current_y;
         let camera_pos = camera_target_pos + direction * zoom_distance;
 
-        // Apply camera position
         camera_transform.translation = camera_pos;
 
-        // Look at target position
         camera_transform.look_at(camera_target_pos, Vec3::Y);
     }
 }

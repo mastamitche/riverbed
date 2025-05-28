@@ -9,6 +9,7 @@ pub struct BuilderPlugin;
 impl Plugin for BuilderPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app
+            .insert_resource(BuilderSettings::default())
             .init_resource::<BuilderChunk>()
             .add_systems(Startup, create_area)
             .add_systems(
