@@ -1,6 +1,7 @@
 use bevy::{
     asset::RenderAssetUsages,
     core_pipeline::experimental::taa::TemporalAntiAliasing,
+    ecs::world,
     pbr::ScreenSpaceAmbientOcclusion,
     prelude::*,
     render::{
@@ -19,7 +20,7 @@ use crate::{
     setup::Block,
     ui::{CameraOrbit, CameraSettings, CameraSmoothing},
     utils::{lerp, INITIAL_FOV},
-    world::{pos3d::Pos3d, CHUNK_S1, CHUNK_S1F},
+    world::{pos3d::Pos3d, CHUNK_S1},
 };
 
 use super::builder_chunk;
@@ -402,23 +403,26 @@ pub fn render_to_image_example_system(
                             // Cast the ray with the settings
                             if let Some(hit) = ray_cast.cast_ray(ray, &settings).first() {
 
-                                let voxel_size = 0.125;
-                                let half_voxel_size = voxel_size / 2.0;
                                 let world_position = hit.1.point;
+                            
+                                let voxel_size = 0.125;
+                                let half_voxel_size = voxel_size / 2.0 + 0.01;
 
                                 let target_voxel_pos = Vec3::new(
-                                    (world_position.x / voxel_size).floor() * voxel_size
+                                    (world_position.x / voxel_size).floor()
+                                        * voxel_size
                                         + half_voxel_size,
-                                    (world_position.y / voxel_size).floor() * voxel_size
+                                    (world_position.y / voxel_size).floor()
+                                        * voxel_size
                                         + half_voxel_size,
-                                    (world_position.z / voxel_size).floor() * voxel_size
+                                    (world_position.z / voxel_size).floor()
+                                        * voxel_size
                                         + half_voxel_size,
                                 );
-
                                 if let Ok((mut transform, mut visibility)) =
                                     preview_query.single_mut()
                                 {
-                                    transform.translation = world_position;
+                                    transform.translation = target_voxel_pos;
                                     building_state.current_position = Some(target_voxel_pos);
                                     *visibility = Visibility::Visible;
                                 }

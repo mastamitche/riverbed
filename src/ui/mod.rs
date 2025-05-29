@@ -3,15 +3,8 @@ use crate::{
     render::camera::{MainCamera, Y_CAM_SPEED},
     utils::lerp,
 };
-use bevy::{
-    input::mouse::MouseWheel,
-    log::tracing_subscriber::fmt::format,
-    prelude::*,
-    render::camera::ScalingMode,
-    window::{CursorGrabMode, SystemCursorIcon},
-};
+use bevy::{input::mouse::MouseWheel, prelude::*};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 pub struct UIPlugin;
 
