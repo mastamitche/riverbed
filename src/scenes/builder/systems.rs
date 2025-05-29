@@ -32,19 +32,24 @@ pub const BUILDER_CHUNK_POS: Pos3d<CHUNK_S1> = Pos3d {
     z: 0,
 };
 pub const BUILDER_CHUNK_POS_V3: Vec3 = Vec3::new(0., BUILDER_Y, 0.);
+pub const SCALED_SIZE: f32 = CHUNK_S1 as f32 / 8.;
 
 #[derive(Deref, Resource)]
 pub struct EditorRenderTexture(Handle<Image>);
 #[derive(Component)]
 pub struct BuildCamera;
+#[derive(Component)]
+pub struct PickerBackground;
 #[derive(Resource)]
 pub struct BuilderSettings {
     pub chunk_size: u32,
+    pub back_panels: Option<[Entity; 6]>,
 }
 impl Default for BuilderSettings {
     fn default() -> Self {
         Self {
-            chunk_size: CHUNK_S1 as u32,
+            chunk_size: SCALED_SIZE as u32,
+            back_panels: None,
         }
     }
 }
@@ -56,8 +61,9 @@ pub fn create_area(
     mut images: ResMut<Assets<Image>>,
     mut egui_user_textures: ResMut<EguiUserTextures>,
     mut egui_global_settings: ResMut<EguiGlobalSettings>,
+    mut builder_settings: ResMut<BuilderSettings>,
 ) {
-    let inner_size = CHUNK_S1F;
+    let inner_size = SCALED_SIZE;
     let half_size = inner_size / 2.;
     egui_global_settings.enable_absorb_bevy_input_system = true;
     let size = Extent3d {
@@ -99,8 +105,8 @@ pub fn create_area(
             },
             CameraSettings {
                 fov: 40.0,
-                height: CHUNK_S1F * 2.,
-                x_z_offset: CHUNK_S1F * 2.,
+                height: SCALED_SIZE * 2.,
+                x_z_offset: SCALED_SIZE * 2.,
             },
             CameraSmoothing::default(),
             Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(half_size, 0.0, 0.0))
@@ -137,7 +143,6 @@ pub fn create_area(
 
     let vertical_panel_xz = Mesh3d(meshes.add(Cuboid::new(wall_length, wall_length, wall_width)));
     let vertical_panel_yz = Mesh3d(meshes.add(Cuboid::new(wall_width, wall_length, wall_length)));
-
     // Top face
     commands.spawn((
         horizontal_panel.clone(),
@@ -233,49 +238,83 @@ pub fn create_area(
         Mesh3d(meshes.add(Plane3d::new(Vec3::Y, Vec2::new(half_size, half_size))));
     let downface_plane_y: Mesh3d =
         Mesh3d(meshes.add(Plane3d::new(Vec3::NEG_Y, Vec2::new(half_size, half_size))));
-    let half_chunk = CHUNK_S1F * 0.5;
-    commands.spawn((
-        backface_plane_z.clone(),
-        MeshMaterial3d(white_material.clone()),
-        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, 0.0, -half_chunk)),
-        WorldMesh,
-        Pickable::default(),
-    ));
-    commands.spawn((
-        forwardface_plane_z.clone(),
-        MeshMaterial3d(white_material.clone()),
-        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, 0.0, half_chunk)),
-        WorldMesh,
-        Pickable::default(),
-    ));
-    commands.spawn((
-        leftface_plane_x.clone(),
-        MeshMaterial3d(white_material.clone()),
-        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(half_chunk, 0.0, 0.)),
-        WorldMesh,
-        Pickable::default(),
-    ));
-    commands.spawn((
-        rightface_plane_x.clone(),
-        MeshMaterial3d(white_material.clone()),
-        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(-half_chunk, 0.0, 0.)),
-        WorldMesh,
-        Pickable::default(),
-    ));
-    commands.spawn((
-        upface_plane_y.clone(),
-        MeshMaterial3d(white_material.clone()),
-        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0.0, -half_chunk, 0.)),
-        WorldMesh,
-        Pickable::default(),
-    ));
-    commands.spawn((
-        downface_plane_y.clone(),
-        MeshMaterial3d(white_material.clone()),
-        Transform::from_translation(BUILDER_CHUNK_POS_V3 + Vec3::new(0., half_chunk, 0.)),
-        WorldMesh,
-        Pickable::default(),
-    ));
+
+    let builder_size = builder_settings.chunk_size as f32 / 8.;
+    let half_chunk = builder_size * 0.5;
+    let middle = Vec3::new(half_chunk, half_chunk, half_chunk);
+    let neg_z = commands
+        .spawn((
+            backface_plane_z.clone(),
+            MeshMaterial3d(white_material.clone()),
+            Transform::from_translation(
+                BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0.0, 0.0, -half_chunk),
+            ),
+            WorldMesh,
+            Pickable::default(),
+            PickerBackground,
+        ))
+        .id();
+    let z = commands
+        .spawn((
+            forwardface_plane_z.clone(),
+            MeshMaterial3d(white_material.clone()),
+            Transform::from_translation(
+                BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0.0, 0.0, half_chunk),
+            ),
+            WorldMesh,
+            Pickable::default(),
+            PickerBackground,
+        ))
+        .id();
+    let neg_x = commands
+        .spawn((
+            rightface_plane_x.clone(),
+            MeshMaterial3d(white_material.clone()),
+            Transform::from_translation(
+                BUILDER_CHUNK_POS_V3 + middle + Vec3::new(-half_chunk, 0.0, 0.),
+            ),
+            WorldMesh,
+            Pickable::default(),
+            PickerBackground,
+        ))
+        .id();
+    let x = commands
+        .spawn((
+            leftface_plane_x.clone(),
+            MeshMaterial3d(white_material.clone()),
+            Transform::from_translation(
+                BUILDER_CHUNK_POS_V3 + middle + Vec3::new(half_chunk, 0.0, 0.),
+            ),
+            WorldMesh,
+            Pickable::default(),
+            PickerBackground,
+        ))
+        .id();
+    let neg_y = commands
+        .spawn((
+            upface_plane_y.clone(),
+            MeshMaterial3d(white_material.clone()),
+            Transform::from_translation(
+                BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0., -half_chunk, 0.),
+            ),
+            WorldMesh,
+            Pickable::default(),
+            PickerBackground,
+        ))
+        .id();
+    let y = commands
+        .spawn((
+            downface_plane_y.clone(),
+            MeshMaterial3d(white_material.clone()),
+            Transform::from_translation(
+                BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0., half_chunk, 0.),
+            ),
+            WorldMesh,
+            Pickable::default(),
+            PickerBackground,
+        ))
+        .id();
+    builder_settings.back_panels = Some([neg_z, z, neg_y, y, neg_x, x]);
 }
 
 pub fn render_to_image_example_system(
@@ -309,7 +348,6 @@ pub fn render_to_image_example_system(
                 cube_preview_texture_id,
                 image_size,
             ));
-            ui.add(egui::Slider::new(&mut builder_settings.chunk_size, 1..=CHUNK_S1 as u32).text("Size"));
             if ui.ui_contains_pointer() {
                 ui.input(|i| {
                     let (camera_global_transform, mut camera_orbit,mut camera_settings, _, camera) =
@@ -403,14 +441,15 @@ pub fn render_to_image_example_system(
                         }
                     }
                     let delta = i.raw_scroll_delta;
-                    if delta.y != 0.0  &&  i.pointer.button_down(egui::PointerButton::Secondary) == false{
+                    if i.pointer.button_down(egui::PointerButton::Secondary) == false{
                         let zoom_speed = 0.04;
                         let zoom_delta = delta.y * zoom_speed;
 
-                        camera_settings.height = (camera_settings.height - zoom_delta).clamp(5.0,  CHUNK_S1F *2.);
+                        camera_settings.height = (camera_settings.height - zoom_delta).clamp(1.0,  builder_settings.chunk_size as f32 * 2.);
                     }
                 });
             }
+            ui.add(egui::Slider::new(&mut builder_settings.chunk_size, 1..=CHUNK_S1 as u32).text("Size"));
         });
 
     Ok(())
@@ -433,7 +472,7 @@ pub fn adjust_camera_angle(
     if let Ok((mut camera_transform, camera_orbit, mut camera_smoothing, camera_settings, _)) =
         query.single_mut()
     {
-        let chunk_middle_1 = builder_settings.chunk_size as f32 / 2.0;
+        let chunk_middle_1 = builder_settings.chunk_size as f32 / 2.0 / 8.;
         let chunk_middle_vec3 = Vec3::new(chunk_middle_1, chunk_middle_1, chunk_middle_1);
         let camera_target_pos = BUILDER_CHUNK_POS_V3 + chunk_middle_vec3;
 
@@ -457,5 +496,43 @@ pub fn adjust_camera_angle(
         camera_transform.translation = camera_pos;
 
         camera_transform.look_at(camera_target_pos, Vec3::Y);
+    }
+}
+
+pub fn update_chunk_border(
+    builder_settings: Res<BuilderSettings>,
+    mut panels: Query<&mut Transform, With<PickerBackground>>,
+) {
+    if let Some(back_panels) = builder_settings.back_panels {
+        let builder_size = builder_settings.chunk_size as f32 / 8.;
+        let half_chunk = builder_size * 0.5;
+        let middle = Vec3::new(half_chunk, half_chunk, half_chunk);
+
+        let [mut neg_z, mut z, mut neg_y, mut y, mut neg_x, mut x] =
+            panels.get_many_mut(back_panels).unwrap();
+
+        let scale_factor = builder_size / SCALED_SIZE;
+
+        let z_scale = Vec3::new(scale_factor, scale_factor, 1.0);
+        let y_scale = Vec3::new(scale_factor, 1.0, scale_factor);
+        let x_scale = Vec3::new(1.0, scale_factor, scale_factor);
+
+        neg_z.translation = BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0.0, 0.0, -half_chunk);
+        neg_z.scale = z_scale;
+
+        z.translation = BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0.0, 0.0, half_chunk);
+        z.scale = z_scale;
+
+        neg_y.translation = BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0.0, -half_chunk, 0.0);
+        neg_y.scale = y_scale;
+
+        y.translation = BUILDER_CHUNK_POS_V3 + middle + Vec3::new(0.0, half_chunk, 0.0);
+        y.scale = y_scale;
+
+        neg_x.translation = BUILDER_CHUNK_POS_V3 + middle + Vec3::new(-half_chunk, 0.0, 0.0);
+        neg_x.scale = x_scale;
+
+        x.translation = BUILDER_CHUNK_POS_V3 + middle + Vec3::new(half_chunk, 0.0, 0.0);
+        x.scale = x_scale;
     }
 }
