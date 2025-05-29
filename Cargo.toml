@@ -93,3 +93,4 @@ testing = []
 # if referencing this in another project you need the .cargo/config.toml to work
 #$env:RUST_BACKTRACE="1"; cargo watch -x "run --target wasm32-unknown-unknown"
 #$env:RUST_BACKTRACE="1"; cargo watch -x "run"
+#$env:RUST_BACKTRACE="1"; cargo watch -x "run --release --features bevy/trace_tracy"
