@@ -403,7 +403,7 @@ pub fn render_to_image_example_system(
                             // Cast the ray with the settings
                             if let Some(hit) = ray_cast.cast_ray(ray, &settings).first() {
 
-                                let world_position = hit.1.point;
+                                let world_position = hit.1.point + hit.1.normal *0.01;
                             
                                 let voxel_size = 0.125;
                                 let half_voxel_size = voxel_size / 2.0 + 0.01;
@@ -453,7 +453,7 @@ pub fn render_to_image_example_system(
                     }
                 });
             }
-            ui.add(egui::Slider::new(&mut builder_settings.chunk_size, 1..=CHUNK_S1 as u32).text("Size"));
+            ui.add(egui::Slider::new(&mut builder_settings.chunk_size, 2..=CHUNK_S1 as u32).text("Size"));
         });
 
     Ok(())
