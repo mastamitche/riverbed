@@ -406,7 +406,7 @@ pub fn render_to_image_example_system(
                                 let world_position = hit.1.point + hit.1.normal *0.01;
                             
                                 let voxel_size = 0.125;
-                                let half_voxel_size = voxel_size / 2.0 + 0.01;
+                                let half_voxel_size = voxel_size / 2.0 ;
 
                                 let target_voxel_pos = Vec3::new(
                                     (world_position.x / voxel_size).floor()
