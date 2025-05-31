@@ -46,7 +46,6 @@ fn place_block(
 ) {
     let was_empty = place_events.is_empty();
     for evt in place_events.read() {
-        println!("Setting block at {:?} to {:?}", evt.pos, evt.destination);
         world.set_block(evt.pos, evt.block, true);
     }
     if was_empty == false {
