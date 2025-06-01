@@ -12,19 +12,13 @@ use bevy::color::palettes::css;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
-use itertools::{iproduct, Itertools};
+use itertools::iproduct;
 use std::collections::{BTreeSet, HashMap};
 use std::time::Instant;
-use strum::IntoEnumIterator;
 const GRID_GIZMO_LEN: i32 = 4;
 
 pub const MAX_MESHING_MS: u32 = 5;
-#[derive(Event)]
-struct VoxelPlacementEvent {
-    position: Vec3,
-    normal: Vec3,
-    voxel_size: f32,
-}
+
 #[derive(Debug, Component)]
 pub struct LOD(pub usize);
 
@@ -195,6 +189,7 @@ pub fn process_mesh_queue(
         &mut Mesh3d,
         &mut MeshMaterial3d<ExtendedMaterial<StandardMaterial, ArrayTextureMaterial>>,
         &mut LOD,
+        &mut Collider,
         &mut Transform,
     )>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -268,15 +263,13 @@ pub fn process_mesh_queue(
 
                             // Create cuboid collider
                             let cuboid = Collider::cuboid(half_x, half_y, half_z);
-
-                            // Add to compound collider (no rotation needed as faces are axis-aligned)
                             collider_shapes.push((center, Quaternion::default(), cuboid));
                         }
                         // Create compound collider from all cuboids
-                        let collider = Collider::compound(collider_shapes);
+                        let new_collider = Collider::trimesh_from_mesh(&mesh).unwrap();
                         // Check if entity already exists for this chunk face
                         if let Some(ent) = chunk_ents.0.get(&chunk_pos) {
-                            if let Ok((mut handle, mut mat, mut old_lod, mut trans)) =
+                            if let Ok((mut handle, mut mat, mut old_lod, mut collider, _)) =
                                 mesh_query.get_mut(*ent)
                             {
                                 let image = chunk.create_ao_texture_data();
@@ -296,6 +289,7 @@ pub fn process_mesh_queue(
                                 mat.0 = new_material;
                                 handle.0 = meshes.add(mesh);
                                 *old_lod = LOD(lod);
+                                *collider = new_collider;
                             } else {
                                 println!("couldn't get_mut mesh for chunk {}", chunk_pos);
                             }
@@ -338,7 +332,7 @@ pub fn process_mesh_queue(
                                     //SimplifiedMesh(mesh_handle),
                                     //Physics
                                     RigidBody::Static, // Static for terrain
-                                    collider,
+                                    new_collider,
                                 ))
                                 .observe(
                                     |trigger: Trigger<Pointer<Move>>,
@@ -350,28 +344,22 @@ pub fn process_mesh_queue(
                                         let mv = trigger.event();
                                         // Convert world position to voxel grid (1/8 unit per voxel)
                                         if let Some(world_position) = mv.hit.position {
-                                            let voxel_size = 0.125;
-                                            let half_voxel_size = voxel_size / 2.0;
+                                            if let Some(world_normal) = mv.hit.normal {
+                                                let voxel_size = 0.125;
+                                                let voxel_half_size = 0.0625;
+                                                let voxel_pos = world_position / voxel_size;
+                                                let target_voxel_pos =
+                                                    (voxel_pos + world_normal).floor() * voxel_size;
 
-                                            let target_voxel_pos = Vec3::new(
-                                                (world_position.x / voxel_size).floor()
-                                                    * voxel_size
-                                                    + half_voxel_size,
-                                                (world_position.y / voxel_size).floor()
-                                                    * voxel_size
-                                                    + half_voxel_size,
-                                                (world_position.z / voxel_size).floor()
-                                                    * voxel_size
-                                                    + half_voxel_size,
-                                            );
-
-                                            if let Ok((mut transform, mut visibility)) =
-                                                preview_query.single_mut()
-                                            {
-                                                transform.translation = target_voxel_pos;
-                                                building_state.current_position =
-                                                    Some(target_voxel_pos);
-                                                *visibility = Visibility::Visible;
+                                                if let Ok((mut transform, mut visibility)) =
+                                                    preview_query.single_mut()
+                                                {
+                                                    transform.translation =
+                                                        target_voxel_pos + voxel_half_size;
+                                                    building_state.current_position =
+                                                        Some(target_voxel_pos);
+                                                    *visibility = Visibility::Visible;
+                                                }
                                             }
                                         }
                                     },
