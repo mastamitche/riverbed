@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use avian3d::{prelude::Gravity, PhysicsPlugins};
 use bevy::{
     core_pipeline::experimental::taa::TemporalAntiAliasPlugin,
     image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
@@ -22,12 +21,10 @@ use ui::UIPlugin;
 use world::GenPlugin;
 use world::VoxelWorld;
 
+use crate::physics::PhysicsPlugin;
 use crate::ui;
 use crate::world;
-use crate::{
-    agents::{self, AgentsPlugin},
-    controls::ActionMappingPlugin,
-};
+use crate::{agents::AgentsPlugin, controls::ActionMappingPlugin};
 use crate::{interactions::PlayerInteractionsPlugin, render};
 use crate::{scenes::ScenesPlugin, sounds};
 
@@ -48,44 +45,41 @@ pub fn create_app() {
         },
     });
     app.insert_resource(VoxelWorld::new())
-        .insert_resource(Gravity(Vec3::NEG_Y * 19.6))
-        .add_plugins((
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        fit_canvas_to_parent: true,
-                        //present_mode: bevy::window::PresentMode::Immediate,
-                        resolution: (1920.0, 1080.0).into(),
-                        prevent_default_event_handling: false,
-                        ..default()
-                    }),
+        .add_plugins((DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    fit_canvas_to_parent: true,
+                    //present_mode: bevy::window::PresentMode::Immediate,
+                    resolution: (1920.0, 1080.0).into(),
+                    prevent_default_event_handling: false,
                     ..default()
-                })
-                .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
-                        backends: Some(
-                            Backends::BROWSER_WEBGPU
-                                | Backends::GL
-                                | Backends::VULKAN
-                                | Backends::METAL,
-                        ),
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(ImagePlugin {
-                    default_sampler: ImageSamplerDescriptor {
-                        address_mode_u: ImageAddressMode::Repeat,
-                        address_mode_v: ImageAddressMode::Repeat,
-                        mag_filter: ImageFilterMode::Nearest,
-                        min_filter: ImageFilterMode::Nearest,
-                        mipmap_filter: ImageFilterMode::Nearest,
-                        ..default()
-                    },
                 }),
-            PhysicsPlugins::default(),
-        ))
+                ..default()
+            })
+            .set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(WgpuSettings {
+                    backends: Some(
+                        Backends::BROWSER_WEBGPU
+                            | Backends::GL
+                            | Backends::VULKAN
+                            | Backends::METAL,
+                    ),
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(ImagePlugin {
+                default_sampler: ImageSamplerDescriptor {
+                    address_mode_u: ImageAddressMode::Repeat,
+                    address_mode_v: ImageAddressMode::Repeat,
+                    mag_filter: ImageFilterMode::Nearest,
+                    min_filter: ImageFilterMode::Nearest,
+                    mipmap_filter: ImageFilterMode::Nearest,
+                    ..default()
+                },
+            }),))
         .add_plugins(AgentsPlugin)
+        .add_plugins(PhysicsPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(GenPlugin)
         .add_plugins(ActionMappingPlugin)

@@ -9,6 +9,7 @@ mod controls;
 mod gen;
 mod interactions;
 mod items;
+mod physics;
 mod render;
 mod scenes;
 mod setup;

@@ -205,7 +205,6 @@ pub fn process_mesh_queue(
     if let Some((chunk_pos, dist)) = mesh_queue.in_progress {
         // Skip if the chunk is no longer in the load area
         if !still_in_load_area(chunk_pos, &load_area) {
-            println!("chunk no longer in load area {:?}", chunk_pos);
             mesh_queue.in_progress = None;
             return;
         }
@@ -246,11 +245,8 @@ pub fn process_mesh_queue(
                                 (min_z + max_z) * 0.5,
                             );
 
-                            let half_extents = Vec3::new(
-                                (max_x - min_x) * 0.5,
-                                (max_y - min_y) * 0.5,
-                                (max_z - min_z) * 0.5,
-                            );
+                            let half_extents =
+                                Vec3::new(max_x - min_x, max_y - min_y, max_z - min_z);
 
                             // For faces that have zero thickness in one dimension, add a small thickness
                             const MIN_THICKNESS: f32 = 0.01;
@@ -274,7 +270,7 @@ pub fn process_mesh_queue(
                             let cuboid = Collider::cuboid(half_x, half_y, half_z);
 
                             // Add to compound collider (no rotation needed as faces are axis-aligned)
-                            collider_shapes.push((center.into(), Quaternion::default(), cuboid));
+                            collider_shapes.push((center, Quaternion::default(), cuboid));
                         }
                         // Create compound collider from all cuboids
                         let collider = Collider::compound(collider_shapes);

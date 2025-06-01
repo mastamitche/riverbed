@@ -1,4 +1,3 @@
-use super::block_action::BlockActionPlugin;
 use super::AgentState;
 use crate::block::Block;
 use crate::controls::action_mapping::{ActionState, GameAction};
@@ -22,7 +21,6 @@ pub struct PlayerSpawn;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PlayerUnlockTimer::default())
-            .add_plugins(BlockActionPlugin)
             .add_systems(
                 Startup,
                 (spawn_player, apply_deferred).chain().in_set(PlayerSpawn),
@@ -174,7 +172,7 @@ pub fn move_player(
         // Part 2: Handle physics (gravity and step-up)
         // Check if player is on ground
         let below_pos = player_pos + Vec3::new(0.0, -1.05, 0.0);
-        let block_below = world.get_block_safe(BlockPos::from((below_pos)));
+        let block_below = world.get_block_safe(BlockPos::from(below_pos));
         let on_ground = block_below != Block::Air;
 
         // Handle jumping
