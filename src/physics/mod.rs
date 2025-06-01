@@ -13,7 +13,7 @@ impl Plugin for PhysicsPlugin {
             ))
             .insert_gizmo_config(
                 PhysicsGizmos {
-                    aabb_color: Some(Color::WHITE),
+                    aabb_color: None,
                     ..default()
                 },
                 GizmoConfig::default(),
