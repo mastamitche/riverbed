@@ -1,7 +1,7 @@
 use crate::{
+    block::Block,
     controls::action_mapping::{ActionState, GameAction},
     render::draw_chunks::BuildingState,
-    setup::Block,
     world::{pos3d::Pos3d, VoxelWorld},
 };
 use bevy::prelude::*;
@@ -33,7 +33,7 @@ pub fn read_general_event(
             };
             place_events.write(PlaceBlockEvent {
                 pos: p,
-                block: Block::AcaciaLeaves,
+                block: Block::Stone,
                 destination: PlaceDestination::World,
             });
         }

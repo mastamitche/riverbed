@@ -1,19 +1,12 @@
-use super::mesh_chunks::ATTRIBUTE_QUAD_SIZE;
-use crate::{
-    block::{Face, FaceSpecifier},
-    world::CHUNK_S1,
-    Block,
-};
+use crate::block::{Block, Face, FaceSpecifier};
 use bevy::{
-    asset::{load_internal_asset, LoadedFolder},
-    pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
+    asset::load_internal_asset,
+    pbr::{ExtendedMaterial, MaterialExtension},
     prelude::*,
     reflect::TypePath,
     render::{
-        mesh::MeshVertexBufferLayoutRef,
         render_asset::RenderAssetUsages,
         render_resource::{AsBindGroup, Extent3d, ShaderRef, TextureDimension, TextureFormat},
-        storage::ShaderStorageBuffer,
     },
 };
 use dashmap::DashMap;

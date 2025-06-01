@@ -12,15 +12,10 @@ use bevy::{
 use bevy_egui::{egui, EguiContexts, EguiGlobalSettings, EguiUserTextures};
 
 use crate::{
-    interactions::place::{PlaceBlockEvent, PlaceDestination},
-    render::{
+    block::Block, interactions::place::{PlaceBlockEvent, PlaceDestination}, render::{
         camera::Y_CAM_SPEED,
         draw_chunks::{BuildingPreview, BuildingState, WorldMesh},
-    },
-    setup::Block,
-    ui::{CameraOrbit, CameraSettings, CameraSmoothing},
-    utils::{lerp, INITIAL_FOV},
-    world::{pos3d::Pos3d, CHUNK_S1},
+    }, ui::{CameraOrbit, CameraSettings, CameraSmoothing}, utils::{lerp, INITIAL_FOV}, world::{pos3d::Pos3d, CHUNK_S1}
 };
 
 use super::builder_chunk;
@@ -439,7 +434,7 @@ pub fn render_to_image_example_system(
                             };
                             place_events.write(PlaceBlockEvent {
                                 pos: p,
-                                block: Block::AcaciaLeaves,
+                                block: Block::Stone,
                                 destination: PlaceDestination::Builder,
                             });
                         }

@@ -1,7 +1,5 @@
-include!(concat!(env!("OUT_DIR"), "/blocks.rs"));
 use std::time::Duration;
 
-use agents::PlayerPlugin;
 use avian3d::{prelude::Gravity, PhysicsPlugins};
 use bevy::{
     core_pipeline::experimental::taa::TemporalAntiAliasPlugin,
@@ -16,9 +14,9 @@ use bevy::{
 };
 use bevy_dev_tools::{
     fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
-    picking_debug::{DebugPickingMode, DebugPickingPlugin},
+    picking_debug::DebugPickingMode,
 };
-use render::{Render, TextureLoadPlugin};
+use render::Render;
 use sounds::SoundPlugin;
 use ui::UIPlugin;
 use world::GenPlugin;

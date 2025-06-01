@@ -1,8 +1,4 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    time::Instant,
-    vec,
-};
+use std::{collections::BTreeSet, time::Instant, vec};
 
 use bevy::{
     image::Image,
@@ -17,19 +13,21 @@ use bevy::{
         },
     },
 };
-use binary_greedy_meshing::{self as bgm, Quad};
 
-use super::{draw_chunks::ChunkMeshingState, texture_array::TextureMapTrait};
-use crate::{
-    block,
-    render::draw_chunks::MeshingStage,
-    utils::timeit_mut,
-    world::{linearize, ChunkPos, CHUNKP_S1, CHUNK_S1},
+use super::{
+    binary_greedy_meshing::{mesh_chunk, MeshData, Quad},
+    draw_chunks::ChunkMeshingState,
+    texture_array::TextureMapTrait,
 };
 use crate::{
     block::Face,
     world::{pad_linearize, Chunk, CHUNKP_S3},
-    Block,
+};
+use crate::{
+    block::{self, Block},
+    render::draw_chunks::MeshingStage,
+    utils::timeit_mut,
+    world::{linearize, ChunkPos, CHUNKP_S1, CHUNK_S1},
 };
 
 const MASK_6: u64 = 0b111111;
@@ -80,7 +78,7 @@ impl Chunk {
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
         if in_progress_state.stage == MeshingStage::PrepareData {
             in_progress_state.voxels = self.voxel_data_lod(lod);
-            in_progress_state.mesh_data = bgm::MeshData::new();
+            in_progress_state.mesh_data = MeshData::new();
             in_progress_state.stage = MeshingStage::Transparents;
             if in_progress_state.is_overtime(&meshing_start_time) {
                 return None;
@@ -104,7 +102,7 @@ impl Chunk {
         }
         if in_progress_state.stage == MeshingStage::GreedyMeshing {
             // timeit_mut("binary greedy meshing", || {
-            bgm::mesh(
+            mesh_chunk(
                 &in_progress_state.voxels,
                 &mut in_progress_state.mesh_data,
                 in_progress_state.transparents.clone(),
@@ -447,8 +445,6 @@ pub fn quad_to_mesh_data(quad: Quad, block: Block, face_n: usize, quad_index: u3
 }
 pub fn get_color_from_block(block: &Block, face: &Face) -> [f32; 4] {
     let color_bits = match (block, face) {
-        (Block::GrassBlock, Face::Up) => 0b011_111_001,
-        (Block::SeaBlock, _) => 0b110_011_001,
         (block, _) if block.is_foliage() => 0b010_101_001,
         _ => 0b111_111_111,
     };

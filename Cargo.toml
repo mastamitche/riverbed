@@ -5,11 +5,6 @@ edition = "2021"
 
 [[bin]]
 name = "riverbed"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[workspace]
-members = [
-    "crates/*"
-]
 
 [dependencies]
 bevy = { version = "0.16" ,default-features = true, features = [
@@ -29,7 +24,6 @@ bevy = { version = "0.16" ,default-features = true, features = [
 bevy_picking = "0.16"
 bevy_dev_tools = "0.16"
 bevy-inspector-egui = "0.31"
-binary-greedy-meshing = { path = "crates/binary-greedy-meshing", version = "*" }
 indexmap = "*"
 itertools = "*"
 vpsearch = "*"
@@ -52,12 +46,10 @@ regex = "*"
 bytemuck ="*"
 json5 = "*"
 wgpu = "23.0.1"
+num-derive = "0.3"
+num-traits = "0.2"
 wasm-bindgen = { version = "0.2.100" }
 bevy_egui = {version="0.34", features = ["open_url", "default_fonts", "render"] }
-riverbed_closest = { path = "crates/riverbed_closest", version = "*" }
-
-[build-dependencies]
-riverbed_block_def = { path = "crates/riverbed_block_def", version = "*" }
 
 [profile.dev]
 opt-level = 0

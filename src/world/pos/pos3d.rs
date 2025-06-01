@@ -1,5 +1,5 @@
 use super::{chunked, un_padded_chunked, unchunked, ColPos, CHUNK_S1I};
-use crate::{world::CHUNK_S1, Block};
+use crate::world::CHUNK_S1;
 use bevy::prelude::Vec3;
 use std::fmt::{Display, Formatter, Result};
 use std::ops::{Add, BitXor};

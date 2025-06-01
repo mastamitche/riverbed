@@ -1,8 +1,9 @@
 use super::block_action::BlockActionPlugin;
 use super::AgentState;
+use crate::block::Block;
 use crate::controls::action_mapping::{ActionState, GameAction};
+use crate::world::RenderDistance;
 use crate::world::{BlockPos, BlockRayCastHit, VoxelWorld};
-use crate::{world::RenderDistance, Block};
 use avian3d::prelude::{Collider, ComputedMass, Friction, LinearVelocity, LockedAxes, RigidBody};
 use bevy::{math::Vec3, prelude::*};
 

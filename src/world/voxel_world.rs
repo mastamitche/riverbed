@@ -1,8 +1,10 @@
+use crate::block::Block;
+
 use super::{
     chunked, pos2d::chunks_in_col, BlockPos, BlockPos2d, Chunk, ChunkPos, ChunkedPos, ColPos,
     ColedPos, CHUNKP_S1, CHUNK_S1, CHUNK_S1I, MAX_HEIGHT, Y_CHUNKS,
 };
-use crate::{world::chunk, Block};
+
 use bevy::{
     asset::Handle,
     image::Image,
@@ -73,6 +75,27 @@ impl VoxelWorld {
 
     pub fn new_with(chunks: Arc<DashMap<ChunkPos, TrackedChunk>>) -> Self {
         VoxelWorld { chunks }
+    }
+
+    pub fn load_chunk(&self, chunk_pos: ChunkPos, serialized_data: &[u8]) {
+        let chunk = Chunk::deserialize(serialized_data);
+        let tracked_chunk = TrackedChunk {
+            chunk,
+            ao_image: None,
+            loaded: true,
+            meshing: false,
+            changed: true, // Mark as changed to ensure it gets meshed
+        };
+
+        self.chunks.insert(chunk_pos, tracked_chunk);
+    }
+
+    pub fn save_chunk(&self, chunk_pos: ChunkPos) -> Option<Vec<u8>> {
+        if let Some(chunk) = self.chunks.get(&chunk_pos) {
+            Some(chunk.chunk.serialize())
+        } else {
+            None
+        }
     }
 
     pub fn set_block(&self, pos: BlockPos, block: Block, from_place: bool) {

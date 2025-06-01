@@ -1,11 +1,8 @@
+use crate::block::Block;
 use crate::r#gen::terrain_gen::GenerationPhase;
 use crate::world::{
-    BlockPos, BlockPos2d, ChunkPos, ColPos, VoxelWorld, CHUNK_S1, CHUNK_S1I, MAX_GEN_HEIGHT,
-    WATER_H,
+    BlockPos, ChunkPos, ColPos, VoxelWorld, CHUNK_S1, CHUNK_S1I, MAX_GEN_HEIGHT, WATER_H,
 };
-use crate::{gen::Soils, Block};
-use bevy::prelude::info_span;
-use riverbed_closest::{ranges, ClosestTrait};
 use std::{collections::HashMap, ops::RangeInclusive};
 
 use super::terrain_gen::GenerationState;
@@ -68,7 +65,7 @@ impl Earth {
                                     y,
                                     z: abs_z,
                                 };
-                                world.set_block(pos, Block::AcaciaLeaves, false);
+                                world.set_block(pos, Block::OakLog, false);
                             }
 
                             // Add grass at the top
@@ -77,7 +74,7 @@ impl Earth {
                                 y: top_height,
                                 z: abs_z,
                             };
-                            world.set_block(grass_pos, Block::AcaciaLeaves, false);
+                            world.set_block(grass_pos, Block::OakLog, false);
 
                             // Move to the next position
                             state.current_z += 1;

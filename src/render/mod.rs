@@ -1,3 +1,4 @@
+pub mod binary_greedy_meshing;
 pub mod camera;
 mod chunk_culling;
 pub mod draw_chunks;
@@ -7,6 +8,7 @@ mod mesh_utils;
 mod shared_load_area;
 pub mod sky;
 pub mod texture_array;
+
 mod texture_load;
 use bevy::prelude::Plugin;
 pub use texture_load::*;
