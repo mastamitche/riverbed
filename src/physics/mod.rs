@@ -9,15 +9,15 @@ impl Plugin for PhysicsPlugin {
             .insert_resource(Gravity(Vec3::NEG_Y * 9.81))
             .add_plugins((
                 PhysicsPlugins::default(),
-                PhysicsDebugPlugin::default()
+                // PhysicsDebugPlugin::default()
             ))
-            .insert_gizmo_config(
-                PhysicsGizmos {
-                    aabb_color: None,
-                    ..default()
-                },
-                GizmoConfig::default(),
-            )
+            // .insert_gizmo_config(
+            //     PhysicsGizmos {
+            //         aabb_color: None,
+            //         ..default()
+            //     },
+            //     GizmoConfig::default(),
+            // )
             //b
             ;
     }
